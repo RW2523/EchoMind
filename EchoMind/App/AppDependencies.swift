@@ -13,6 +13,9 @@ final class AppDependencies {
     let chunkRepository: any ChunkRepository
     let permissions: any PermissionManaging
     let settingsStore: AppSettingsStore
+    let audioCapturing: any AudioCapturing
+    let transcriptionService: any TranscriptionService
+    let speechAssets: any SpeechAssetManaging
     /// Held strongly so the store outlives every context/repository derived from it.
     let modelContainer: ModelContainer
 
@@ -26,6 +29,9 @@ final class AppDependencies {
         self.documentRepository = SwiftDataDocumentRepository(modelContainer: container)
         self.chunkRepository = SwiftDataChunkRepository(modelContainer: container)
         self.permissions = permissions
+        self.audioCapturing = AudioEngineManager()
+        self.transcriptionService = SpeechAnalyzerTranscriber()
+        self.speechAssets = SpeechAssetManager()
         let store = AppSettingsStore(container: container)
         self.settingsStore = store
         self.onboardingComplete = store.onboardingComplete

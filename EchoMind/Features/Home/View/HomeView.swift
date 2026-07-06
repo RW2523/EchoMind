@@ -1,16 +1,22 @@
 import SwiftUI
 
-/// Home tab placeholder. Becomes the real dashboard (Start Live Transcript, Ask,
-/// Import, recent sessions) in Phase 4.
+/// Home tab. Live transcription is reachable here from Phase 3; the full
+/// dashboard (Ask, Import, recent sessions) fills in during Phase 4.
 struct HomeView: View {
     var body: some View {
         List {
             Section {
-                Text("Start Live Transcript")
-                Text("Ask My Knowledge")
-                Text("Import Document")
-            } header: {
-                Text("Coming soon")
+                NavigationLink {
+                    LiveTranscriptView()
+                } label: {
+                    Label("Start Live Transcript", systemImage: "mic.circle.fill")
+                }
+            }
+            Section("Coming soon") {
+                Label("Ask My Knowledge", systemImage: "sparkles")
+                    .foregroundStyle(.secondary)
+                Label("Import Document", systemImage: "doc.badge.plus")
+                    .foregroundStyle(.secondary)
             }
         }
         .navigationTitle("EchoMind")
@@ -18,5 +24,8 @@ struct HomeView: View {
 }
 
 #if DEBUG
-#Preview { NavigationStack { HomeView() } }
+#Preview {
+    NavigationStack { HomeView() }
+        .environment(AppDependencies.preview())
+}
 #endif
