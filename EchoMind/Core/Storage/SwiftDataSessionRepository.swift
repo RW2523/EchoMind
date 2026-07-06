@@ -55,6 +55,43 @@ actor SwiftDataSessionRepository: SessionRepository {
         try modelContext.save()               // one transaction
     }
 
+    // MARK: - Phase 4
+
+    func recentSessions(limit: Int?) async throws -> [SessionSnapshot] {
+        var descriptor = FetchDescriptor<Session>(sortBy: [SortDescriptor(\.createdAt, order: .reverse)])
+        if let limit { descriptor.fetchLimit = limit }
+        return try modelContext.fetch(descriptor).map(\.snapshot)
+    }
+
+    func search(matching query: String) async throws -> [SessionSnapshot] {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return try await fetchAll() }
+        let sessions = try modelContext.fetch(
+            FetchDescriptor<Session>(sortBy: [SortDescriptor(\.createdAt, order: .reverse)]))
+        return sessions.filter { session in
+            session.title.localizedStandardContains(trimmed)
+                || session.segments.contains { $0.text.localizedStandardContains(trimmed) }
+        }.map(\.snapshot)
+    }
+
+    func previewText(sessionID: UUID, maxCharacters: Int) async throws -> String {
+        guard let session = try sessionModel(id: sessionID) else { return "" }
+        let joined = session.segments
+            .sorted { $0.startTime < $1.startTime }
+            .map(\.text)
+            .joined(separator: " ")
+        let collapsed = joined.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return String(collapsed.prefix(maxCharacters))
+    }
+
+    func rename(sessionID: UUID, to title: String) async throws {
+        guard let session = try sessionModel(id: sessionID) else { throw StorageError.sessionNotFound }
+        session.title = title
+        session.updatedAt = Date()
+        try modelContext.save()
+    }
+
     // MARK: - Helpers
 
     private func sessionModel(id: UUID) throws -> Session? {

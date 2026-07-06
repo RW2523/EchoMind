@@ -26,6 +26,14 @@ actor SwiftDataChunkRepository: ChunkRepository {
         try modelContext.save()
     }
 
+    func deleteChunks(sourceId: UUID, sourceType: SourceType) async throws {
+        let raw = sourceType.rawValue
+        let descriptor = FetchDescriptor<KnowledgeChunk>(
+            predicate: #Predicate { $0.sourceId == sourceId && $0.sourceTypeRaw == raw })
+        for chunk in try modelContext.fetch(descriptor) { modelContext.delete(chunk) }
+        try modelContext.save()
+    }
+
     func deleteAll() async throws {
         try modelContext.delete(model: KnowledgeChunk.self)
         try modelContext.save()

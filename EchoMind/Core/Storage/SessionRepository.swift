@@ -17,4 +17,10 @@ nonisolated protocol SessionRepository: Sendable {
     func fetchSession(id: UUID) async throws -> SessionSnapshot?
     func fetchSegments(sessionId: UUID) async throws -> [SegmentSnapshot]
     func delete(id: UUID) async throws
+
+    // Phase 4 additions
+    func recentSessions(limit: Int?) async throws -> [SessionSnapshot]
+    func search(matching query: String) async throws -> [SessionSnapshot]
+    func previewText(sessionID: UUID, maxCharacters: Int) async throws -> String
+    func rename(sessionID: UUID, to title: String) async throws
 }
