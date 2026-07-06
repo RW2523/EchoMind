@@ -13,6 +13,7 @@ struct DebugStorageSection: View {
     var body: some View {
         Section("Debug — Storage") {
             Button("Insert dummy session") { Task { await insertDummy() } }
+            Button("Insert 9,000-word fixture") { Task { await insertFixture() } }
             Button("Fetch counts") { Task { await fetchCounts() } }
             Button("Delete dummy sessions", role: .destructive) { Task { await deleteDummies() } }
             Text(status)
@@ -35,6 +36,24 @@ struct DebugStorageSection: View {
             status = "Inserted session + 3 segments"
         } catch {
             status = "Insert failed: \(error)"
+        }
+    }
+
+    private func insertFixture() async {
+        do {
+            let id = UUID()
+            try await dependencies.sessionRepository.create(
+                SessionSnapshot(id: id, title: "Fixture Meeting", origin: .live))
+            let segments = DebugFixtures.meetingSegments()
+            for segment in segments {
+                try await dependencies.sessionRepository.appendSegment(
+                    SegmentSnapshot(sessionId: id, text: segment.text,
+                                    startTime: segment.startTime, endTime: segment.endTime),
+                    toSession: id)
+            }
+            status = "Inserted fixture with \(segments.count) segments"
+        } catch {
+            status = "Fixture failed: \(error)"
         }
     }
 

@@ -16,6 +16,10 @@ final class AppDependencies {
     let audioCapturing: any AudioCapturing
     let transcriptionService: any TranscriptionService
     let speechAssets: any SpeechAssetManaging
+    let tokenBudgeter: TokenBudgeter
+    let modelGateway: any ModelGateway
+    let availabilityMonitor: any AvailabilityProviding
+    let summarizer: any SummarizerService
     /// Held strongly so the store outlives every context/repository derived from it.
     let modelContainer: ModelContainer
 
@@ -32,6 +36,12 @@ final class AppDependencies {
         self.audioCapturing = AudioEngineManager()
         self.transcriptionService = SpeechAnalyzerTranscriber()
         self.speechAssets = SpeechAssetManager()
+        let budgeter = TokenBudgeter()
+        let gateway = FoundationModelService()
+        self.tokenBudgeter = budgeter
+        self.modelGateway = gateway
+        self.availabilityMonitor = ModelAvailabilityMonitor()
+        self.summarizer = MapReduceSummarizer(gateway: gateway, budgeter: budgeter)
         let store = AppSettingsStore(container: container)
         self.settingsStore = store
         self.onboardingComplete = store.onboardingComplete

@@ -16,7 +16,11 @@ struct SessionDetailView: View {
         }
         .task {
             if model == nil {
-                let vm = SessionDetailViewModel(session: session, repository: dependencies.sessionRepository)
+                let vm = SessionDetailViewModel(
+                    session: session,
+                    repository: dependencies.sessionRepository,
+                    summarizer: dependencies.summarizer,
+                    availability: dependencies.availabilityMonitor)
                 model = vm
                 await vm.load()
             }
@@ -32,7 +36,7 @@ private struct SessionDetailContent: View {
 
     var body: some View {
         List {
-            SummarySection(session: model.session)
+            SummarySectionView(model: model)
             Section("Transcript") {
                 if model.segments.isEmpty {
                     Text("No transcript").foregroundStyle(.secondary)
