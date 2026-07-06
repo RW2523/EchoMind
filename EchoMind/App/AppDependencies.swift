@@ -20,6 +20,7 @@ final class AppDependencies {
     let modelGateway: any ModelGateway
     let availabilityMonitor: any AvailabilityProviding
     let summarizer: any SummarizerService
+    let documentImporter: any DocumentImportService
     /// Held strongly so the store outlives every context/repository derived from it.
     let modelContainer: ModelContainer
 
@@ -30,8 +31,10 @@ final class AppDependencies {
     init(container: ModelContainer, permissions: any PermissionManaging) {
         self.modelContainer = container
         self.sessionRepository = SwiftDataSessionRepository(modelContainer: container)
-        self.documentRepository = SwiftDataDocumentRepository(modelContainer: container)
+        let docRepository = SwiftDataDocumentRepository(modelContainer: container)
+        self.documentRepository = docRepository
         self.chunkRepository = SwiftDataChunkRepository(modelContainer: container)
+        self.documentImporter = DefaultDocumentImportService(documents: docRepository)
         self.permissions = permissions
         self.audioCapturing = AudioEngineManager()
         self.transcriptionService = SpeechAnalyzerTranscriber()
