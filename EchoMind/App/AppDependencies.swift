@@ -24,6 +24,8 @@ final class AppDependencies {
     let embeddingService: any EmbeddingService
     let vectorSearch: VectorSearch
     let indexer: any IndexerService
+    let chatRepository: any ChatRepository
+    let ragService: any RAGService
     /// Held strongly so the store outlives every context/repository derived from it.
     let modelContainer: ModelContainer
 
@@ -45,6 +47,7 @@ final class AppDependencies {
         self.vectorSearch = VectorSearch()
         self.indexer = RAGIndexer(documents: docRepository, sessions: sessionRepo,
                                   chunks: chunkRepo, embedder: embedder)
+        self.chatRepository = SwiftDataChatRepository(modelContainer: container)
         self.permissions = permissions
         self.audioCapturing = AudioEngineManager()
         self.transcriptionService = SpeechAnalyzerTranscriber()
@@ -53,8 +56,13 @@ final class AppDependencies {
         let gateway = FoundationModelService()
         self.tokenBudgeter = budgeter
         self.modelGateway = gateway
-        self.availabilityMonitor = ModelAvailabilityMonitor()
         self.summarizer = MapReduceSummarizer(gateway: gateway, budgeter: budgeter)
+        let monitor = ModelAvailabilityMonitor()
+        self.availabilityMonitor = monitor
+        self.ragService = RAGPipeline(
+            chunks: chunkRepo, embedder: embedder, search: VectorSearch(),
+            gateway: gateway, budgeter: budgeter,
+            availability: { await MainActor.run { monitor.status } })
         let store = AppSettingsStore(container: container)
         self.settingsStore = store
         self.onboardingComplete = store.onboardingComplete

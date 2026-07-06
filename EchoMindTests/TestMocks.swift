@@ -36,6 +36,15 @@ nonisolated struct MockTranscriptionService: TranscriptionService {
     func stop() async {}
 }
 
+nonisolated struct MockEmbeddingService: EmbeddingService {
+    let dim: Int
+    let map: @Sendable (String) -> [Float]
+
+    var dimension: Int { get async throws { dim } }
+    func embed(_ texts: [String]) async throws -> [[Float]] { texts.map(map) }
+    func prepareAssets() async throws {}
+}
+
 nonisolated struct StubSpeechAssetManager: SpeechAssetManaging {
     var configuredStatus: SpeechAssetStatus = .installed
 

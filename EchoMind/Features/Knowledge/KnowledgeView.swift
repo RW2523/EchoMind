@@ -9,6 +9,13 @@ struct KnowledgeView: View {
 
     private static let importTypes: [UTType] = [.pdf, .plainText, UTType(filenameExtension: "md")].compactMap { $0 }
 
+    @ViewBuilder private func destination(for source: KnowledgeSource) -> some View {
+        switch source {
+        case .document(let doc): DocumentDetailView(documentId: doc.id, initialPageNumber: nil)
+        case .session(let session): SessionDetailView(session: session)
+        }
+    }
+
     var body: some View {
         Group {
             if let model {
@@ -17,12 +24,16 @@ struct KnowledgeView: View {
                         HStack { ProgressView(); Text("Importing…").foregroundStyle(.secondary) }
                     }
                     ForEach(model.sources) { source in
-                        KnowledgeSourceRow(source: source)
-                            .swipeActions {
-                                Button(role: .destructive) {
-                                    Task { await model.delete(source) }
-                                } label: { Label("Delete", systemImage: "trash") }
-                            }
+                        NavigationLink {
+                            destination(for: source)
+                        } label: {
+                            KnowledgeSourceRow(source: source)
+                        }
+                        .swipeActions {
+                            Button(role: .destructive) {
+                                Task { await model.delete(source) }
+                            } label: { Label("Delete", systemImage: "trash") }
+                        }
                     }
                 }
                 .overlay {

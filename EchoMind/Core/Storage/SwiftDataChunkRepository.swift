@@ -20,6 +20,13 @@ actor SwiftDataChunkRepository: ChunkRepository {
         return try modelContext.fetch(descriptor).map(\.snapshot)
     }
 
+    func fetch(ids: [UUID]) async throws -> [ChunkSnapshot] {
+        guard !ids.isEmpty else { return [] }
+        let idSet = Set(ids)
+        let descriptor = FetchDescriptor<KnowledgeChunk>(predicate: #Predicate { idSet.contains($0.id) })
+        return try modelContext.fetch(descriptor).map(\.snapshot)
+    }
+
     func deleteChunks(sourceId: UUID) async throws {
         let descriptor = FetchDescriptor<KnowledgeChunk>(predicate: #Predicate { $0.sourceId == sourceId })
         for chunk in try modelContext.fetch(descriptor) { modelContext.delete(chunk) }

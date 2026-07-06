@@ -76,6 +76,25 @@ nonisolated struct DocumentSnapshot: Sendable, Hashable, Identifiable {
     }
 }
 
+nonisolated struct ChatMessageSnapshot: Sendable, Hashable, Identifiable {
+    var id: UUID
+    var conversationId: UUID
+    var role: MessageRole
+    var content: String
+    var sourceRefs: [SourceRef]
+    var createdAt: Date
+
+    init(id: UUID = UUID(), conversationId: UUID, role: MessageRole, content: String,
+         sourceRefs: [SourceRef] = [], createdAt: Date = Date()) {
+        self.id = id
+        self.conversationId = conversationId
+        self.role = role
+        self.content = content
+        self.sourceRefs = sourceRefs
+        self.createdAt = createdAt
+    }
+}
+
 nonisolated struct ChunkSnapshot: Sendable, Hashable, Identifiable {
     var id: UUID
     var sourceId: UUID

@@ -5,6 +5,7 @@ import Foundation
 nonisolated protocol ChunkRepository: Sendable {
     func insert(_ chunks: [ChunkSnapshot]) async throws
     func fetchAll() async throws -> [ChunkSnapshot]
+    func fetch(ids: [UUID]) async throws -> [ChunkSnapshot]
     func deleteChunks(sourceId: UUID) async throws
     func deleteChunks(sourceId: UUID, sourceType: SourceType) async throws
     func deleteAll() async throws
