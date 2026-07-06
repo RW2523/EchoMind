@@ -23,7 +23,8 @@ struct LiveTranscriptView: View {
                     transcription: dependencies.transcriptionService,
                     assets: dependencies.speechAssets,
                     sessions: dependencies.sessionRepository,
-                    permissions: dependencies.permissions)
+                    permissions: dependencies.permissions,
+                    indexer: dependencies.indexer)
             }
         }
     }

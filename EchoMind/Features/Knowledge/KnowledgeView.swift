@@ -57,7 +57,8 @@ struct KnowledgeView: View {
             if model == nil {
                 let vm = KnowledgeViewModel(documents: dependencies.documentRepository,
                                             sessions: dependencies.sessionRepository,
-                                            importer: dependencies.documentImporter)
+                                            importer: dependencies.documentImporter,
+                                            indexer: dependencies.indexer)
                 model = vm
                 await vm.load()
             } else {

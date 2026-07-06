@@ -34,6 +34,7 @@ final class LiveTranscriptViewModel {
     private let assets: any SpeechAssetManaging
     private let sessions: any SessionRepository
     private let permissions: any PermissionManaging
+    private let indexer: (any IndexerService)?
     private let locale: Locale
 
     private var sessionId: UUID?
@@ -46,12 +47,14 @@ final class LiveTranscriptViewModel {
          assets: any SpeechAssetManaging,
          sessions: any SessionRepository,
          permissions: any PermissionManaging,
+         indexer: (any IndexerService)? = nil,
          locale: Locale = .current) {
         self.audio = audio
         self.transcription = transcription
         self.assets = assets
         self.sessions = sessions
         self.permissions = permissions
+        self.indexer = indexer
         self.locale = locale
     }
 
@@ -208,6 +211,9 @@ final class LiveTranscriptViewModel {
         eventTask?.cancel()
         updateTask?.cancel()
         await finalize()
+        if let indexer, let id = sessionId {
+            Task { [indexer] in try? await indexer.indexSession(id: id) }
+        }
         phase = .idle
     }
 

@@ -21,6 +21,9 @@ final class AppDependencies {
     let availabilityMonitor: any AvailabilityProviding
     let summarizer: any SummarizerService
     let documentImporter: any DocumentImportService
+    let embeddingService: any EmbeddingService
+    let vectorSearch: VectorSearch
+    let indexer: any IndexerService
     /// Held strongly so the store outlives every context/repository derived from it.
     let modelContainer: ModelContainer
 
@@ -30,11 +33,18 @@ final class AppDependencies {
 
     init(container: ModelContainer, permissions: any PermissionManaging) {
         self.modelContainer = container
-        self.sessionRepository = SwiftDataSessionRepository(modelContainer: container)
+        let sessionRepo = SwiftDataSessionRepository(modelContainer: container)
+        self.sessionRepository = sessionRepo
         let docRepository = SwiftDataDocumentRepository(modelContainer: container)
         self.documentRepository = docRepository
-        self.chunkRepository = SwiftDataChunkRepository(modelContainer: container)
+        let chunkRepo = SwiftDataChunkRepository(modelContainer: container)
+        self.chunkRepository = chunkRepo
         self.documentImporter = DefaultDocumentImportService(documents: docRepository)
+        let embedder = NLContextualEmbeddingService()
+        self.embeddingService = embedder
+        self.vectorSearch = VectorSearch()
+        self.indexer = RAGIndexer(documents: docRepository, sessions: sessionRepo,
+                                  chunks: chunkRepo, embedder: embedder)
         self.permissions = permissions
         self.audioCapturing = AudioEngineManager()
         self.transcriptionService = SpeechAnalyzerTranscriber()

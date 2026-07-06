@@ -10,13 +10,16 @@ final class KnowledgeViewModel {
     private let documents: any DocumentRepository
     private let sessions: any SessionRepository
     private let importer: any DocumentImportService
+    private let indexer: any IndexerService
 
     init(documents: any DocumentRepository,
          sessions: any SessionRepository,
-         importer: any DocumentImportService) {
+         importer: any DocumentImportService,
+         indexer: any IndexerService) {
         self.documents = documents
         self.sessions = sessions
         self.importer = importer
+        self.indexer = indexer
     }
 
     func load() async {
@@ -30,8 +33,10 @@ final class KnowledgeViewModel {
         isImporting = true
         defer { isImporting = false }
         do {
-            _ = try await importer.importDocument(at: url)
-            await load()
+            let id = try await importer.importDocument(at: url)
+            await load()                          // shows "Not indexed yet"
+            try? await indexer.indexDocument(id: id)
+            await load()                          // reflects .ready
         } catch let error as ImportError {
             importError = error.errorDescription
         } catch {
