@@ -1,0 +1,11 @@
+# Xcode / build artifacts
+xcuserdata/
+DerivedData/
+build/
+*.xcuserstate
+.DS_Store
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Do NOT ignore *.xcodeproj — the pbxproj is shared state; we just never edit it by hand.
