@@ -133,6 +133,9 @@ final class LiveTranscriptViewModel {
             switch try await assets.status(for: locale) {
             case .installed:
                 return true
+            case .unavailable:
+                phase = .failed(.speechUnavailable)
+                return false
             case .unsupportedLocale:
                 phase = .failed(.localeUnsupported(locale.identifier))
                 return false

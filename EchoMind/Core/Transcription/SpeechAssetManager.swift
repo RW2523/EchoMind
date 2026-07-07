@@ -6,8 +6,10 @@ import Speech
 /// Phase 9 network-audit allowlist rationale.
 nonisolated struct SpeechAssetManager: SpeechAssetManaging {
     func status(for locale: Locale) async throws -> SpeechAssetStatus {
-        let target = locale.identifier(.bcp47)
         let supported = await SpeechTranscriber.supportedLocales
+        // No models at all (the simulator ships none) — a distinct, honest state.
+        guard !supported.isEmpty else { return .unavailable }
+        let target = locale.identifier(.bcp47)
         guard supported.contains(where: { $0.identifier(.bcp47) == target }) else {
             return .unsupportedLocale
         }

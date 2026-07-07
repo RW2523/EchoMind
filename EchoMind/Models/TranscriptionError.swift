@@ -10,4 +10,5 @@ nonisolated enum TranscriptionError: Error, Equatable {
     case transcriberFailed(String)
     case sessionActivationFailed
     case insufficientStorage
+    case speechUnavailable
 }

@@ -1,4 +1,5 @@
 import Foundation
+import Speech
 
 #if DEBUG
 /// DEBUG-only end-to-end check, triggered by the `--selftest-ask` launch
@@ -9,6 +10,17 @@ enum AskSelfTest {
     static func runIfRequested(_ dependencies: AppDependencies) async {
         guard CommandLine.arguments.contains("--selftest-ask") else { return }
         print("[SelfTest] availability = \(dependencies.availabilityMonitor.status)")
+
+        // Speech locale diagnostics (why "transcription isn't available for <locale>").
+        let supported = await SpeechTranscriber.supportedLocales
+        let installed = await SpeechTranscriber.installedLocales
+        let current = Locale.current
+        print("[SelfTest] currentLocale=\(current.identifier) bcp47=\(current.identifier(.bcp47))")
+        print("[SelfTest] supportedLocales(\(supported.count))=\(supported.map { $0.identifier(.bcp47) }.prefix(8))")
+        print("[SelfTest] installedLocales(\(installed.count))=\(installed.map { $0.identifier(.bcp47) }.prefix(8))")
+        if let status = try? await dependencies.speechAssets.status(for: current) {
+            print("[SelfTest] assetStatus(current)=\(status)")
+        }
 
         let id = UUID()
         do {

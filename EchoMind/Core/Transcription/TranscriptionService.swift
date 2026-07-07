@@ -20,6 +20,9 @@ nonisolated enum SpeechAssetStatus: Sendable, Equatable {
     case installed
     case needsDownload
     case unsupportedLocale
+    /// No speech models are available at all (e.g. the iOS Simulator, which
+    /// ships none) — distinct from a specific locale being unsupported.
+    case unavailable
 }
 
 nonisolated protocol SpeechAssetManaging: Sendable {

@@ -187,6 +187,8 @@ private struct LiveTranscriptContent: View {
             return "Couldn't start audio. Try again."
         case .insufficientStorage:
             return "Not enough storage to record — free up space and try again."
+        case .speechUnavailable:
+            return "Live transcription isn't available here. It needs a physical iPhone — the Simulator has no on-device speech models."
         }
     }
 }
