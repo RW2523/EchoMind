@@ -26,6 +26,9 @@ final class AppDependencies {
     let indexer: any IndexerService
     let chatRepository: any ChatRepository
     let ragService: any RAGService
+    let storageUsageService: any StorageUsageService
+    let dataExportService: any DataExportService
+    let dataWipeService: any DataWipeService
     /// Held strongly so the store outlives every context/repository derived from it.
     let modelContainer: ModelContainer
 
@@ -47,7 +50,11 @@ final class AppDependencies {
         self.vectorSearch = VectorSearch()
         self.indexer = RAGIndexer(documents: docRepository, sessions: sessionRepo,
                                   chunks: chunkRepo, embedder: embedder)
-        self.chatRepository = SwiftDataChatRepository(modelContainer: container)
+        let chatRepo = SwiftDataChatRepository(modelContainer: container)
+        self.chatRepository = chatRepo
+        self.storageUsageService = DefaultStorageUsageService(sessions: sessionRepo, documents: docRepository, chunks: chunkRepo)
+        self.dataExportService = DefaultDataExportService(sessions: sessionRepo, documents: docRepository)
+        self.dataWipeService = DefaultDataWipeService(sessions: sessionRepo, documents: docRepository, chunks: chunkRepo, chat: chatRepo)
         self.permissions = permissions
         self.audioCapturing = AudioEngineManager()
         self.transcriptionService = SpeechAnalyzerTranscriber()

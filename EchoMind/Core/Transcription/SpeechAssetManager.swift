@@ -2,8 +2,8 @@ import Foundation
 import Speech
 
 /// Locale support check + on-device model install via AssetInventory (§3.3).
-/// The download is OS-managed (not URLSession in our target) — see the Phase 9
-/// network-audit allowlist rationale.
+/// The download is OS-managed (no networking APIs in our own code) — see the
+/// Phase 9 network-audit allowlist rationale.
 nonisolated struct SpeechAssetManager: SpeechAssetManaging {
     func status(for locale: Locale) async throws -> SpeechAssetStatus {
         let target = locale.identifier(.bcp47)
