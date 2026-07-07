@@ -27,32 +27,36 @@ import SwiftData
                     availability: availability)
     }
 
-    @Test func emptyIndexShortCircuits() async throws {
+    @Test func emptyKnowledgeStillAnswersConversationally() async throws {
         let (chunks, _) = try makeChunks()
-        let result = try await pipeline(chunks: chunks, gateway: MockModelGateway()).ask("anything")
-        #expect(result == .emptyIndex)
+        let gateway = MockModelGateway(respondReturn: "Hi! How can I help?")
+        let result = try await pipeline(chunks: chunks, gateway: gateway).ask("Hi")
+        #expect(result == .conversational(answer: "Hi! How can I help?"))
+        // Conversation uses respond (no guided generation) when there's no context.
+        #expect(await gateway.counts().respond == 1)
     }
 
-    @Test func groundedAnswerCitesSources() async throws {
+    @Test func groundedWhenModelUsesContext() async throws {
         let (chunks, _) = try makeChunks()
         try await seed(chunks, texts: ["The refund policy is 30 days."])
-        let gateway = MockModelGateway(respondReturn: "The refund policy is 30 days.")
+        let gateway = MockModelGateway(
+            ragAnswerReturn: RAGAnswer(answer: "The refund policy is 30 days.", usedProvidedContext: true))
         let result = try await pipeline(chunks: chunks, gateway: gateway).ask("refund policy?")
         if case .grounded(let answer, let sources) = result {
             #expect(answer == "The refund policy is 30 days.")
             #expect(sources.count == 1)
-            #expect(sources[0].sourceType == .document)
         } else {
             Issue.record("expected grounded, got \(result)")
         }
     }
 
-    @Test func exactNotFoundSentenceMapsToNotFound() async throws {
+    @Test func conversationalWhenContextIrrelevant() async throws {
         let (chunks, _) = try makeChunks()
-        try await seed(chunks, texts: ["Unrelated content."])
-        let gateway = MockModelGateway(respondReturn: RAGPrompts.notFoundSentence)
-        let result = try await pipeline(chunks: chunks, gateway: gateway).ask("what is the meaning of life?")
-        #expect(result == .notFound)
+        try await seed(chunks, texts: ["Unrelated meeting notes."])
+        let gateway = MockModelGateway(
+            ragAnswerReturn: RAGAnswer(answer: "Hello there!", usedProvidedContext: false))
+        let result = try await pipeline(chunks: chunks, gateway: gateway).ask("Hi")
+        #expect(result == .conversational(answer: "Hello there!"))
     }
 
     @Test func tierBReturnsRetrievalOnly() async throws {
@@ -71,21 +75,20 @@ import SwiftData
     @Test func overflowDropsRetriesThenFallsBack() async throws {
         let (chunks, _) = try makeChunks()
         try await seed(chunks, texts: ["Passage one.", "Passage two.", "Passage three."])
-        // Both the initial answer and the drop-one retry overflow.
-        let gateway = MockModelGateway(overflowRespond: 2)
+        let gateway = MockModelGateway(overflowGenerate: 2)
         let result = try await pipeline(chunks: chunks, gateway: gateway).ask("question")
         if case .retrievalOnly(_, let reason) = result {
             #expect(reason == .contextOverflow)
         } else {
             Issue.record("expected retrievalOnly(contextOverflow), got \(result)")
         }
-        #expect(await gateway.counts().respond == 2)   // initial + one retry
+        #expect(await gateway.counts().generate == 2)   // initial + one retry
     }
 
     @Test func overLongQuestionRejectedBeforeModelCall() async throws {
         let (chunks, _) = try makeChunks()
         try await seed(chunks, texts: ["Passage."])
-        let longQuestion = String(repeating: "word ", count: 600)   // ~857 tokens > 250
+        let longQuestion = String(repeating: "word ", count: 600)
         await #expect(throws: RAGError.questionTooLong) {
             _ = try await self.pipeline(chunks: chunks, gateway: MockModelGateway()).ask(longQuestion)
         }

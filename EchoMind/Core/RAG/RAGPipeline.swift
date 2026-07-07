@@ -7,10 +7,12 @@ nonisolated enum RetrievalOnlyReason: Sendable, Equatable {
 }
 
 nonisolated enum AskResult: Sendable, Equatable {
+    /// Answered from the user's knowledge; sources cite the passages used.
     case grounded(answer: String, sources: [SourceRef])
-    case notFound
+    /// Casual chat / general knowledge — no sources.
+    case conversational(answer: String)
+    /// Tier B or a generation failure — the top passages, no generated answer.
     case retrievalOnly(passages: [RetrievedChunk], reason: RetrievalOnlyReason)
-    case emptyIndex
 }
 
 nonisolated enum RAGError: Error, Equatable {
@@ -22,18 +24,30 @@ nonisolated protocol RAGService: Sendable {
 }
 
 nonisolated enum RAGPrompts {
-    static let notFoundSentence = "I couldn't find this in your saved knowledge."
-    static let instructions = """
-    Answer the question using ONLY the provided context passages. Preserve names, \
-    numbers, and dates exactly. If the context does not contain the answer, reply \
-    with exactly this sentence and nothing else: \(notFoundSentence)
+    /// Used when there is knowledge to consult — the model decides whether it's relevant.
+    static let hybrid = """
+    You are EchoMind, a friendly and helpful assistant. The user may chat casually \
+    or ask about their own saved knowledge, which is provided below as Context \
+    passages. If the Context is relevant to the message, answer using it and set \
+    usedProvidedContext to true, preserving names, numbers, and dates verbatim. If \
+    the message is casual conversation or general knowledge unrelated to the Context, \
+    answer naturally and set usedProvidedContext to false. Keep answers concise.
     """
+
+    /// Used when there is no knowledge indexed yet — pure conversation.
+    static let conversational = """
+    You are EchoMind, a friendly and concise assistant. Respond helpfully to the \
+    user's message. If they ask about their saved notes or documents, let them know \
+    they can add knowledge by importing a document or recording a session.
+    """
+
     static func prompt(question: String, context: String) -> String {
-        "Context:\n\(context)\n\nQuestion: \(question)"
+        "Context:\n\(context)\n\nMessage: \(question)"
     }
 }
 
-/// Retrieve -> budget-pack -> grounded answer / fallback ladder (§6.3, §3 budgets).
+/// Hybrid chatbot: conversational for chit-chat, grounded for knowledge questions.
+/// The model itself flags whether it used the retrieved context (§3 budgets hold).
 nonisolated struct RAGPipeline: RAGService {
     let chunks: any ChunkRepository
     let embedder: any EmbeddingService
@@ -52,34 +66,35 @@ nonisolated struct RAGPipeline: RAGService {
         let trimmed = question.trimmingCharacters(in: .whitespacesAndNewlines)
         guard budgeter.tokens(in: trimmed) <= Self.questionTokenLimit else { throw RAGError.questionTooLong }
 
+        let status = await availability()
         let stored = try await chunks.fetchAll()
-        guard !stored.isEmpty else { return .emptyIndex }
 
-        // Embed question + retrieve top-K.
-        let dimension = try await embedder.dimension
-        guard let queryVector = try await embedder.embed([trimmed]).first else {
-            return .retrievalOnly(passages: [], reason: .generationFailed)
-        }
-        let candidates: [(id: UUID, vector: [Float])] = stored.compactMap { chunk in
-            guard let vector = try? VectorPacking.unpack(chunk.embedding, expectedDimension: dimension) else { return nil }
-            return (chunk.id, vector)
-        }
-        let byId = Dictionary(stored.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-        let retrieved: [RetrievedChunk] = search.topK(query: queryVector, candidates: candidates, k: Self.retrieveK)
-            .compactMap { hit in byId[hit.id].map { RetrievedChunk(chunk: $0, score: hit.score) } }
-
-        // Tier B → retrieval-only, a first-class result.
-        if case .tierB(let reason) = await availability() {
+        // Tier B: no on-device generation — return passages (or nothing) honestly.
+        if case .tierB(let reason) = status {
+            let retrieved = stored.isEmpty ? [] : try await retrieve(trimmed, from: stored)
             return .retrievalOnly(passages: retrieved, reason: .tierB(Self.reasonText(reason)))
         }
 
+        // Tier A, empty knowledge → pure conversation.
+        if stored.isEmpty {
+            do {
+                let answer = try await gateway.respond(instructions: RAGPrompts.conversational,
+                                                       prompt: trimmed, maxOutputTokens: Self.outputReserve)
+                return .conversational(answer: answer.trimmingCharacters(in: .whitespacesAndNewlines))
+            } catch {
+                return .retrievalOnly(passages: [], reason: .generationFailed)
+            }
+        }
+
+        // Tier A with knowledge → retrieve + let the model decide grounded vs chat.
+        let retrieved = try await retrieve(trimmed, from: stored)
         let packed = packChunks(retrieved, question: trimmed)
         do {
-            return try await answer(question: trimmed, packed: packed)
+            return try await hybridAnswer(question: trimmed, packed: packed)
         } catch ModelGatewayError.exceededContextWindow {
             guard packed.count > 1 else { return .retrievalOnly(passages: retrieved, reason: .contextOverflow) }
             do {
-                return try await answer(question: trimmed, packed: Array(packed.dropLast()))
+                return try await hybridAnswer(question: trimmed, packed: Array(packed.dropLast()))
             } catch {
                 return .retrievalOnly(passages: retrieved, reason: .contextOverflow)
             }
@@ -90,24 +105,38 @@ nonisolated struct RAGPipeline: RAGService {
 
     // MARK: - Helpers
 
-    private func answer(question: String, packed: [RetrievedChunk]) async throws -> AskResult {
+    private func retrieve(_ question: String, from stored: [ChunkSnapshot]) async throws -> [RetrievedChunk] {
+        let dimension = try await embedder.dimension
+        guard let queryVector = try await embedder.embed([question]).first else { return [] }
+        let candidates: [(id: UUID, vector: [Float])] = stored.compactMap { chunk in
+            guard let vector = try? VectorPacking.unpack(chunk.embedding, expectedDimension: dimension) else { return nil }
+            return (chunk.id, vector)
+        }
+        let byId = Dictionary(stored.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        return search.topK(query: queryVector, candidates: candidates, k: Self.retrieveK)
+            .compactMap { hit in byId[hit.id].map { RetrievedChunk(chunk: $0, score: hit.score) } }
+    }
+
+    private func hybridAnswer(question: String, packed: [RetrievedChunk]) async throws -> AskResult {
         let context = packed.enumerated()
             .map { "[\($0.offset + 1)] \($0.element.chunk.text)" }
             .joined(separator: "\n\n")
-        let response = try await gateway.respond(
-            instructions: RAGPrompts.instructions,
+        let result = try await gateway.generate(
+            instructions: RAGPrompts.hybrid,
             prompt: RAGPrompts.prompt(question: question, context: context),
-            maxOutputTokens: Self.outputReserve)
-        let trimmed = response.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed == RAGPrompts.notFoundSentence { return .notFound }
-        let sources = packed.map {
-            SourceRef(sourceId: $0.chunk.sourceId, sourceType: $0.chunk.sourceType, chunkId: $0.chunk.id)
+            as: RAGAnswer.self)
+        let answer = result.answer.trimmingCharacters(in: .whitespacesAndNewlines)
+        if result.usedProvidedContext {
+            let sources = packed.map {
+                SourceRef(sourceId: $0.chunk.sourceId, sourceType: $0.chunk.sourceType, chunkId: $0.chunk.id)
+            }
+            return .grounded(answer: answer, sources: sources)
         }
-        return .grounded(answer: trimmed, sources: sources)
+        return .conversational(answer: answer)
     }
 
     private func packChunks(_ retrieved: [RetrievedChunk], question: String) -> [RetrievedChunk] {
-        let overhead = budgeter.tokens(in: RAGPrompts.instructions) + budgeter.tokens(in: question)
+        let overhead = budgeter.tokens(in: RAGPrompts.hybrid) + budgeter.tokens(in: question)
         let budget = min(Self.chunkBudget, Self.totalInputBudget - overhead)
         var included: [RetrievedChunk] = []
         var used = 0

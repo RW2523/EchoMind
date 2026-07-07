@@ -13,6 +13,7 @@ struct DebugStorageSection: View {
     var body: some View {
         Section("Debug — Storage") {
             Button("Insert dummy session") { Task { await insertDummy() } }
+            Button("Insert + index sample document") { Task { await insertSampleDocument() } }
             Button("Insert 9,000-word fixture") { Task { await insertFixture() } }
             Button("Fetch counts") { Task { await fetchCounts() } }
             Button("Delete dummy sessions", role: .destructive) { Task { await deleteDummies() } }
@@ -36,6 +37,21 @@ struct DebugStorageSection: View {
             status = "Inserted session + 3 segments"
         } catch {
             status = "Insert failed: \(error)"
+        }
+    }
+
+    private func insertSampleDocument() async {
+        do {
+            let id = UUID()
+            try await dependencies.documentRepository.create(
+                DocumentSnapshot(id: id, title: DebugFixtures.sampleDocumentTitle, fileName: "handbook.md",
+                                 fileType: .md, textContent: DebugFixtures.sampleDocumentText,
+                                 pageBreaks: [], status: .imported))
+            status = "Inserted document — indexing…"
+            try await dependencies.indexer.indexDocument(id: id)
+            status = "Sample document indexed — try Ask (e.g. \"what is the refund policy?\")"
+        } catch {
+            status = "Sample doc: created, but indexing failed (\(error)). Ask needs embeddings."
         }
     }
 

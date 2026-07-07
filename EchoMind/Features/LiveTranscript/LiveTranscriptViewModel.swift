@@ -23,7 +23,13 @@ final class LiveTranscriptViewModel {
         let end: TimeInterval
     }
 
-    private(set) var phase: Phase = .idle
+    private(set) var phase: Phase = .idle {
+        didSet {
+            #if DEBUG
+            if case .failed(let error) = phase { print("[LiveTranscript] failed: \(error)") }
+            #endif
+        }
+    }
     private(set) var finalizedLines: [TranscriptLine] = []
     private(set) var volatileText: String = ""
     private(set) var elapsed: TimeInterval = 0

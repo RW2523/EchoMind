@@ -10,6 +10,30 @@ nonisolated enum DebugFixtures {
     static let groundTruthRisk = "Risk: the analytics vendor contract expires before the migration completes."
     static let groundTruthQuestion = "Open question: do we need a data-processing addendum for the EU region?"
 
+    // A realistic sample document to seed the Knowledge tab for testing Ask.
+    static let sampleDocumentTitle = "Company Handbook"
+    static let sampleDocumentText = """
+    # Company Handbook
+
+    ## Refund Policy
+    Customers may request a refund within 30 days of purchase. Refunds are processed \
+    within 5 business days to the original payment method. Digital goods are \
+    non-refundable once downloaded.
+
+    ## Support Hours
+    Customer support is available Monday through Friday, 9am to 6pm Pacific Time. \
+    Priority support customers also get weekend coverage.
+
+    ## Vacation Policy
+    Full-time employees accrue 20 days of paid vacation per year, plus 10 company \
+    holidays. Unused vacation rolls over up to a maximum of 5 days.
+
+    ## Security
+    All company laptops must use full-disk encryption. Priya Nair leads the security \
+    team and runs the quarterly vendor security audit. Report incidents to \
+    security@example.com within 24 hours.
+    """
+
     private static let topics = [
         "the onboarding funnel", "quarterly revenue", "the billing migration",
         "customer churn", "the mobile roadmap", "infrastructure costs",

@@ -42,5 +42,8 @@ final class ModelAvailabilityMonitor: AvailabilityProviding {
             @unknown default: status = .tierB(.unknown)
             }
         }
+        #if DEBUG
+        print("[EchoMind][Availability] \(status)")
+        #endif
     }
 }

@@ -66,12 +66,10 @@ final class AskViewModel {
             try? await chat.append(message)
             return AskMessage(id: message.id, role: .assistant, content: answer,
                               sources: await resolve(refs), kind: .grounded)
-        case .notFound:
-            let message = ChatMessageSnapshot(conversationId: conversationId, role: .assistant,
-                                              content: RAGPrompts.notFoundSentence)
+        case .conversational(let answer):
+            let message = ChatMessageSnapshot(conversationId: conversationId, role: .assistant, content: answer)
             try? await chat.append(message)
-            return AskMessage(id: message.id, role: .assistant, content: RAGPrompts.notFoundSentence,
-                              sources: [], kind: .notFound)
+            return AskMessage(id: message.id, role: .assistant, content: answer, sources: [], kind: .plain)
         case .retrievalOnly(let passages, let reason):
             let refs = passages.map { SourceRef(sourceId: $0.chunk.sourceId, sourceType: $0.chunk.sourceType, chunkId: $0.chunk.id) }
             let header = Self.header(for: reason)
@@ -80,11 +78,6 @@ final class AskViewModel {
             try? await chat.append(message)
             return AskMessage(id: message.id, role: .assistant, content: header,
                               sources: await resolve(refs), kind: .retrievalOnly)
-        case .emptyIndex:
-            let text = "You haven't added any knowledge yet. Import a document or record a session first."
-            let message = ChatMessageSnapshot(conversationId: conversationId, role: .assistant, content: text)
-            try? await chat.append(message)
-            return AskMessage(id: message.id, role: .assistant, content: text, sources: [], kind: .plain)
         }
     }
 
@@ -99,7 +92,6 @@ final class AskViewModel {
     private func render(_ snapshot: ChatMessageSnapshot) async -> AskMessage {
         let kind: AskMessage.Kind
         if snapshot.role == .user { kind = .user }
-        else if snapshot.content == RAGPrompts.notFoundSentence { kind = .notFound }
         else if snapshot.sourceRefs.isEmpty { kind = .plain }
         else { kind = .grounded }
         return AskMessage(id: snapshot.id, role: snapshot.role, content: snapshot.content,
