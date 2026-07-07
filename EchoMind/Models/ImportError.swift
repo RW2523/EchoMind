@@ -8,6 +8,7 @@ nonisolated enum ImportError: LocalizedError, Equatable {
     case scannedPDF
     case emptyDocument
     case tooLarge(limitMB: Int)
+    case insufficientStorage
 
     var errorDescription: String? {
         switch self {
@@ -25,6 +26,8 @@ nonisolated enum ImportError: LocalizedError, Equatable {
             return "That document has no readable text."
         case .tooLarge(let limitMB):
             return "That document is too large — more than \(limitMB) MB of text."
+        case .insufficientStorage:
+            return "Not enough storage to save this — free up space and try again."
         }
     }
 }

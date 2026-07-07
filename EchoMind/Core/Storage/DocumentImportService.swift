@@ -15,6 +15,7 @@ nonisolated struct DefaultDocumentImportService: DocumentImportService {
     private static let extractedLimit = 5 * 1024 * 1024
 
     func importDocument(at url: URL) async throws -> UUID {
+        guard StorageGuard.hasSufficientSpace() else { throw ImportError.insufficientStorage }
         // Security scope: true for document-picker URLs; false (but still
         // readable) for regular URLs. Only a failed READ is access-denied.
         let scoped = url.startAccessingSecurityScopedResource()

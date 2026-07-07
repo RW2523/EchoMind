@@ -9,4 +9,5 @@ nonisolated enum TranscriptionError: Error, Equatable {
     case assetDownloadFailed(String)
     case transcriberFailed(String)
     case sessionActivationFailed
+    case insufficientStorage
 }

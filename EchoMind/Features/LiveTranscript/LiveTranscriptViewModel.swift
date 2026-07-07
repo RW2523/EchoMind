@@ -73,6 +73,10 @@ final class LiveTranscriptViewModel {
         }
 
         guard await ensurePermissions(), await ensureAssets() else { return }
+        guard StorageGuard.hasSufficientSpace() else {
+            phase = .failed(.insufficientStorage)
+            return
+        }
 
         let id = UUID()
         let started = Date()

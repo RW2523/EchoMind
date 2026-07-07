@@ -75,6 +75,7 @@ struct AskView: View {
             } label: {
                 Image(systemName: "arrow.up.circle.fill").font(.title2)
             }
+            .accessibilityLabel("Send question")
             .disabled(model.draft.trimmingCharacters(in: .whitespaces).isEmpty || model.state == .thinking)
         }
         .padding()

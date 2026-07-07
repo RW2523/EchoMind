@@ -185,6 +185,8 @@ private struct LiveTranscriptContent: View {
             return "Transcription stopped — your recording up to this point is saved."
         case .sessionActivationFailed:
             return "Couldn't start audio. Try again."
+        case .insufficientStorage:
+            return "Not enough storage to record — free up space and try again."
         }
     }
 }

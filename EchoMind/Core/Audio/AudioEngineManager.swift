@@ -35,6 +35,10 @@ actor AudioEngineManager: AudioCapturing {
 
     // MARK: - Lifecycle
 
+    /// NOTE (§7.3): capture lifetime belongs to this actor / app scope, NOT to
+    /// any view. Recording must survive view disappearance (background capture
+    /// is a core feature) — only `stop()` or an unrecoverable interruption ends
+    /// it. Do not tie start/stop to a view's `.task`/`onDisappear`.
     func start() async throws -> AsyncThrowingStream<AudioBufferBox, Error> {
         guard state == .idle else { throw AudioCaptureError.alreadyCapturing }
         do {

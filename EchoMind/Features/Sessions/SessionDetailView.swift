@@ -64,6 +64,7 @@ private struct SessionDetailContent: View {
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
+                .accessibilityLabel("Session actions")
             }
         }
         .alert("Rename Session", isPresented: $showRename) {

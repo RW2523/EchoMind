@@ -76,9 +76,11 @@ actor RAGIndexer: IndexerService {
     func rebuildAll() async throws {
         try await chunks.deleteAll()
         for document in (try? await documents.fetchAll()) ?? [] {
+            try Task.checkCancellation()
             try? await indexDocument(id: document.id)
         }
         for session in (try? await sessions.recentSessions(limit: nil)) ?? [] {
+            try Task.checkCancellation()
             try? await indexSession(id: session.id)
         }
     }
@@ -87,6 +89,7 @@ actor RAGIndexer: IndexerService {
 
     private func embedAndStore(_ textChunks: [TextChunk], sourceId: UUID) async throws {
         guard !textChunks.isEmpty else { return }
+        try Task.checkCancellation()
         let vectors = try await embedder.embed(textChunks.map(\.text))
         var snapshots: [ChunkSnapshot] = []
         snapshots.reserveCapacity(textChunks.count)
