@@ -59,6 +59,25 @@ struct AskView: View {
                                            description: Text("Ask a question across your sessions and documents."))
                 }
             }
+            if !model.suggestedFollowUps.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(model.suggestedFollowUps, id: \.self) { chip in
+                            Button {
+                                Task { await model.askFollowUp(chip) }
+                            } label: {
+                                Text(chip)
+                                    .font(.callout).lineLimit(1)
+                                    .padding(.horizontal, 12).padding(.vertical, 7)
+                                    .background(.tint.opacity(0.12), in: Capsule())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal)
+                    .padding(.bottom, 4)
+                }
+            }
             inputBar(model)
         }
     }

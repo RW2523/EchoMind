@@ -20,4 +20,5 @@ nonisolated struct AskMessage: Identifiable, Equatable {
     let content: String
     let sources: [AskSource]
     let kind: Kind
+    var followUps: [String] = []
 }

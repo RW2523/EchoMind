@@ -39,6 +39,8 @@ final class AskViewModel {
         guard !question.isEmpty, state == .idle else { return }
         draft = ""
 
+        // Prior turns (before this question) become the pipeline's memory.
+        let history = messages.map { ChatTurn(role: $0.role, content: $0.content) }
         let userMessage = ChatMessageSnapshot(conversationId: conversationId, role: .user, content: question)
         try? await chat.append(userMessage)
         messages.append(await render(userMessage))
@@ -47,7 +49,7 @@ final class AskViewModel {
         defer { state = .idle }
 
         do {
-            let result = try await rag.ask(question)
+            let result = try await rag.ask(question, history: history)
             messages.append(await persist(result))
         } catch RAGError.questionTooLong {
             await appendAssistant("That question is too long. Try asking something shorter.")
@@ -56,20 +58,33 @@ final class AskViewModel {
         }
     }
 
+    func askFollowUp(_ text: String) async {
+        guard state == .idle else { return }
+        draft = text
+        await send()
+    }
+
+    /// The most recent assistant message's suggested follow-ups, if any.
+    var suggestedFollowUps: [String] {
+        guard state == .idle, let last = messages.last, last.role == .assistant else { return [] }
+        return last.followUps
+    }
+
     // MARK: - Result handling
 
     private func persist(_ result: AskResult) async -> AskMessage {
         switch result {
-        case .grounded(let answer, let refs):
+        case .grounded(let answer, let refs, let followUps):
             let message = ChatMessageSnapshot(conversationId: conversationId, role: .assistant,
                                               content: answer, sourceRefs: refs)
             try? await chat.append(message)
             return AskMessage(id: message.id, role: .assistant, content: answer,
-                              sources: await resolve(refs), kind: .grounded)
-        case .conversational(let answer):
+                              sources: await resolve(refs), kind: .grounded, followUps: followUps)
+        case .conversational(let answer, let followUps):
             let message = ChatMessageSnapshot(conversationId: conversationId, role: .assistant, content: answer)
             try? await chat.append(message)
-            return AskMessage(id: message.id, role: .assistant, content: answer, sources: [], kind: .plain)
+            return AskMessage(id: message.id, role: .assistant, content: answer, sources: [], kind: .plain,
+                              followUps: followUps)
         case .retrievalOnly(let passages, let reason):
             let refs = passages.map { SourceRef(sourceId: $0.chunk.sourceId, sourceType: $0.chunk.sourceType, chunkId: $0.chunk.id) }
             let header = Self.header(for: reason)
