@@ -260,3 +260,24 @@ Rough total: **8–10 focused weeks**, each milestone independently shippable.
    launch-screen key).
 5. Optional but wise: a designed app icon from a designer for P13 (I'll ship a programmatic
    one regardless).
+
+---
+
+## 11. Build progress log
+
+- **V2.0 (P11–13): SHIPPED to branch `v2`.** NLEmbedding-grounded RAG in the
+  simulator, conversational core (BM25+RRF, memory, follow-ups), design system +
+  UI overhaul. 146→ tests green.
+- **V2.1 (P14–15): CODE-COMPLETE, pending package + device.**
+  - P14: `LocalLLMEngine` seam, `GuidedJSON` (reuses `@Generable` schema via
+    `GeneratedContent(json:)`), `LocalLLMGateway`, `FeatureRouter`, `LocalModelCatalog`.
+    `MLXEngine` behind `#if canImport(MLXLLM)`.
+  - P15: `RoutingModelGateway` (wired as the app gateway), `AISettingsStore`,
+    `ModelDownloadService` + `MLXModelDownloader` (`#if canImport`), `ModelStorage`
+    marker truth, `AIModelsView` manager with consent. 159 tests green.
+  - **Blocked on human:** add `ml-explore/mlx-swift-examples` (MLXLLM, MLXLMCommon)
+    in Xcode, then device-download a model and verify local inference with Apple
+    Intelligence off. Reconcile `MLXEngine.swift` if the MLX API drifted. Extend the
+    network-audit test with the downloader-only allowlist once the package is present.
+- **P16 (retrieval quality):** not started — MMR rerank behind the eval harness needs
+  no package and can proceed anytime.
