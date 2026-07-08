@@ -48,6 +48,17 @@ final class AppDependencies {
         return UnavailableDiarizationService()
         #endif
     }()
+    /// Vector store seam (M4). InMemory (brute-force, the shipping default) unless
+    /// the sqlite-vec package is linked, in which case on-disk indexing is used.
+    let vectorStore: any VectorStore = {
+        #if canImport(SQLiteVec)
+        if let base = try? FileManager.default.url(for: .applicationSupportDirectory,
+                                                   in: .userDomainMask, appropriateFor: nil, create: true) {
+            return SQLiteVecVectorStore(url: base.appendingPathComponent("vectors.sqlite"))
+        }
+        #endif
+        return InMemoryVectorStore()
+    }()
 
     /// Mirrors `settingsStore.onboardingComplete` but observable, so flipping it
     /// on completion re-renders `RootView` without an async flash (§2.7).

@@ -23,7 +23,7 @@ no telemetry, vetted, and behind a swappable seam.
 1. Open `EchoMind.xcodeproj` in Xcode.
 2. **File ▸ Add Package Dependencies…**
 3. Paste the repo URL above. Dependency Rule: **Up to Next Major** from the latest release.
-4. Add to the **EchoMind** app target. Select products **MLXLLM** and **MLXLMCommon**.
+4. Add to the **EchoMind** app target. Select products **MLXLLM**, **MLXLMCommon**, and **MLXEmbedders**.
 5. Build once (`⌘B`). This compiles `MLXEngine.swift` (guarded by `#if canImport(MLXLLM)`).
    Until this step, the app builds fine without the engine — the local path just
    reports "model not ready".
@@ -37,13 +37,57 @@ The engine downloads weights from the pinned Hugging Face repo
 an explicit consent screen (Phase 15). The network-audit test is extended with a
 downloader-only allowlist; nothing else may hit the network.
 
-## Where the seam lives
+## FluidAudio (M3 — speaker diarization)
 
-- `Core/AI/Local/LocalLLMEngine.swift` — the protocol (messages → text).
-- `Core/AI/Local/MLXEngine.swift` — the only file importing MLX (`#if canImport`).
+- **Repo:** https://github.com/FluidInference/FluidAudio
+- **Product to add:** `FluidAudio`
+- **Why:** on-device speaker diarization ("who spoke when") over a retained
+  recording. Core ML models, no server. Open source.
+- **License:** open source (verify the current license before shipping).
+- **What lights up when added:** `FluidAudioDiarizer` (behind `#if canImport(FluidAudio)`).
+
+### Xcode setup
+
+1. **File ▸ Add Package Dependencies…** → paste the repo URL → add product
+   **FluidAudio** to the **EchoMind** target. Build once.
+2. Diarization is **user-initiated** (Session ▸ ⋯ ▸ *Identify Speakers*), shown only
+   when the package is linked **and** the session has retained audio (needs P17 on).
+3. Device-only for real results; the Simulator builds the code but has no audio input.
+4. If the FluidAudio API drifted, reconcile in `FluidAudioDiarizer.normalize` /
+   `diarize` — the single `#if`-guarded touch point. Audio decode + 16 kHz-mono
+   resample is done locally and is package-independent.
+
+### Kill criterion
+
+Diarization is a **spike, not a commitment**: if label accuracy embarrasses on 3
+real multi-speaker recordings, park the feature (hide the action) — the seam and
+tests stay, no other code depends on it.
+
+## sqlite-vec (M4 — vector store, OPTIONAL / scale only)
+
+- **Repo:** https://github.com/asg017/sqlite-vec (Swift Package distribution)
+- **Product to add:** `SQLiteVec`
+- **Why:** an indexed on-disk vector search. **Not needed at personal scale** —
+  brute-force vDSP cosine is sub-millisecond over thousands of chunks. Adopt only
+  when the corpus is large (trigger: > 50k chunks **or** measured `topK` > 10 ms).
+- **What lights up when added:** `SQLiteVecVectorStore` (behind `#if canImport(SQLiteVec)`).
+  Without it, `InMemoryVectorStore` (the brute-force seam) is used — identical
+  results, fully tested.
+- Reconcile the extension-registration + `vec0` table calls in
+  `SQLiteVecVectorStore` if the package API drifted.
+
+## Where the seams live
+
+- `Core/AI/Local/LocalLLMEngine.swift` — LLM protocol (messages → text).
+- `Core/AI/Local/MLXEngine.swift` — only file importing `MLXLLM` (`#if canImport`).
 - `Core/AI/Local/LocalLLMGateway.swift` — adapts any engine to `ModelGateway`.
-- `Core/AI/Local/GuidedJSON.swift` — emulates guided generation via `@Generable`'s
-  own `GenerationSchema` + `GeneratedContent(json:)`.
+- `Core/AI/Local/GuidedJSON.swift` — guided generation via `@Generable`'s
+  `GenerationSchema` + `GeneratedContent(json:)`.
 - `Core/AI/FeatureRouter.swift` — Apple-FM vs local vs retrieval-only decision.
+- `Core/RAG/GemmaEmbeddingService.swift` — only file importing `MLXEmbedders`.
+- `Core/Diarization/FluidAudioDiarizer.swift` — only file importing `FluidAudio`.
+- `Core/RAG/VectorStore.swift` — vector-store protocol + in-memory default.
+- `Core/RAG/SQLiteVecVectorStore.swift` — only file importing `SQLiteVec`.
 
-Swapping engines (e.g. llama.cpp) = one new `LocalLLMEngine` conformer. Nothing above changes.
+Each package sits behind exactly one file. Swapping an engine (e.g. llama.cpp) or a
+store = one new conformer; nothing else changes.

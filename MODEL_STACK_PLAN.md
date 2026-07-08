@@ -14,7 +14,7 @@ layer** so models are data, not code paths.
 | Live transcript | SpeechTranscriber / SpeechAnalyzer | ✅ **Shipped in V1** | None |
 | Speaker labels (optional) | FluidAudio | ✅ **Code-complete** — DiarizationService seam + SpeakerLabeler + SessionDetail action; dormant until FluidAudio added | M3 device kill-criterion |
 | RAG embeddings | EmbeddingGemma 300M (~200 MB) | ✅ **Code-complete** — `GemmaEmbeddingService` seam + resolver + Model Manager section; dormant until MLXEmbedders added | M2 device eval |
-| RAG vector store | sqlite-vec | ⚠️ Currently brute-force vDSP cosine (sub-ms at our scale) | **M4 — deferred, trigger-based** |
+| RAG vector store | sqlite-vec | ✅ **Code-complete** — VectorStore seam + tested InMemory default + SQLiteVecVectorStore behind #if | M4 device (scale only) |
 
 Two rows I recommend adjusting:
 
@@ -78,10 +78,16 @@ Built this increment (P17 audio retention landed, so there's real audio to run o
 - **Kill criterion (unchanged):** if label accuracy embarrasses on 3 real
   multi-speaker recordings, park it — it's a spike, not a commitment.
 
-### M4 — sqlite-vec (deferred)
-- Not scheduled. Revisit when the trigger fires (50k chunks / >10 ms topK).
-- If adopted: keep `VectorSearch` as the seam; sqlite-vec becomes an
-  implementation behind it, embeddings mirrored into a sidecar `.sqlite`.
+### M4 — sqlite-vec — CODE-COMPLETE (activate at scale only)
+- `VectorStore` seam; `InMemoryVectorStore` (brute-force, tested, shipping default)
+  gives identical results to `VectorSearch`; `SQLiteVecVectorStore` behind
+  `#if canImport(SQLiteVec)` for on-disk indexing.
+- Exposed via `AppDependencies.vectorStore` (auto-picks sqlite-vec when linked).
+- 5 new tests; 198 total green.
+- **Still trigger-based in practice:** brute force is the right default; only wire
+  RAG's retrieval to query the store, and mirror embeddings on index, once the
+  corpus crosses the trigger (>50k chunks / >10 ms topK). That last hop is the one
+  untested/hot-path change, so it waits for real scale + the package.
 
 ## 3. Sequence
 
