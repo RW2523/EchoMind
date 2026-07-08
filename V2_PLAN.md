@@ -279,5 +279,7 @@ Rough total: **8–10 focused weeks**, each milestone independently shippable.
     in Xcode, then device-download a model and verify local inference with Apple
     Intelligence off. Reconcile `MLXEngine.swift` if the MLX API drifted. Extend the
     network-audit test with the downloader-only allowlist once the package is present.
-- **P16 (retrieval quality):** not started — MMR rerank behind the eval harness needs
-  no package and can proceed anytime.
+- **P16 (retrieval quality): SHIPPED.** MMR diversity reranking (`MMRReranker`, λ=0.7)
+  wired into `RAGPipeline` hybrid retrieval (fused pool→MMR→top-6; BM25-only exact hits
+  preserved). Measured: diversity win proven deterministically (MMRRerankerTests);
+  handbook recall not regressed on real NLEmbedding vectors (RetrievalEval gate). 165 tests green.

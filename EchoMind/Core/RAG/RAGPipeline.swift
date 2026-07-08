@@ -63,6 +63,8 @@ nonisolated struct RAGPipeline: RAGService {
     static let outputReserve = 1_000
     static let retrieveK = 6
     static let fusionPoolK = 20
+    static let mmrPoolK = 12
+    static let mmrLambda: Float = 0.7
     static let memoryTurns = 6
 
     func ask(_ question: String, history: [ChatTurn]) async throws -> AskResult {
@@ -142,9 +144,34 @@ nonisolated struct RAGPipeline: RAGService {
                                       k: Self.fusionPoolK).map(\.id)
 
         let byId = Dictionary(stored.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-        return BM25.reciprocalRankFusion([vectorRanking, bm25Ranking])
-            .prefix(Self.retrieveK)
-            .compactMap { fused in byId[fused.id].map { RetrievedChunk(chunk: $0, score: Float(fused.score)) } }
+        let fused = BM25.reciprocalRankFusion([vectorRanking, bm25Ranking])
+        let ordered = mmrOrder(fused: fused, queryVector: queryVector, vectors: vectorCandidates)
+        let scoreById = Dictionary(fused.map { ($0.id, $0.score) }, uniquingKeysWith: { first, _ in first })
+        return ordered.compactMap { id in
+            byId[id].map { RetrievedChunk(chunk: $0, score: Float(scoreById[id] ?? 0)) }
+        }
+    }
+
+    /// MMR-rerank the fused pool for diversity, then take `retrieveK`. Fused
+    /// candidates that came from BM25 only (no usable vector) are appended in fused
+    /// order so exact keyword hits are never dropped by the diversity pass.
+    private func mmrOrder(fused: [(id: UUID, score: Double)],
+                          queryVector: [Float],
+                          vectors: [(id: UUID, vector: [Float])]) -> [UUID] {
+        let pool = Array(fused.prefix(Self.mmrPoolK))
+        let vecById = Dictionary(vectors.map { ($0.id, $0.vector) }, uniquingKeysWith: { first, _ in first })
+        let mmrInput = pool.compactMap { item in vecById[item.id].map { (id: item.id, vector: $0) } }
+        guard mmrInput.count >= 2 else { return pool.prefix(Self.retrieveK).map(\.id) }
+
+        var picked = MMRReranker(lambda: Self.mmrLambda)
+            .rerank(query: queryVector, candidates: mmrInput, k: Self.retrieveK)
+        var seen = Set(picked)
+        for item in pool where !seen.contains(item.id) {
+            guard picked.count < Self.retrieveK else { break }
+            picked.append(item.id)
+            seen.insert(item.id)
+        }
+        return picked
     }
 
     // MARK: - Budget + memory

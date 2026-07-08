@@ -15,4 +15,18 @@ import Foundation
         // NLEmbedding sentence vectors comfortably clear this on the handbook.
         #expect(result.score >= 0.6, "retrieval score \(result.hits)/\(result.total); misses: \(result.misses)")
     }
+
+    /// P16 ship gate: MMR diversity reranking must not regress handbook recall.
+    /// (Its measurable *win* — surfacing diverse passages over near-duplicates — is
+    /// proven deterministically in MMRRerankerTests; here we prove it's safe on real
+    /// embeddings before shipping it in the pipeline.)
+    @Test func mmrRerankDoesNotRegressHandbookRecall() async throws {
+        let eval = RetrievalEval(embedder: NLEmbeddingService(), search: VectorSearch())
+        let suite = RetrievalEval.handbookSuite()
+        let plain = try await eval.score(chunks: suite.chunks, cases: suite.cases, k: 3)
+        let reranked = try await eval.score(chunks: suite.chunks, cases: suite.cases, k: 3,
+                                            reranker: MMRReranker(lambda: RAGPipeline.mmrLambda))
+        #expect(reranked.score >= plain.score,
+                "MMR regressed recall: \(reranked.hits)/\(reranked.total) vs plain \(plain.hits)/\(plain.total)")
+    }
 }

@@ -20,20 +20,31 @@ nonisolated struct RetrievalEval {
     let embedder: any EmbeddingService
     let search: VectorSearch
 
-    func score(chunks: [String], cases: [Case], k: Int = 3) async throws -> Result {
+    /// When `reranker` is supplied, the top-K is drawn from a larger vector pool and
+    /// MMR-reordered — so the gate can confirm diversity reranking doesn't regress recall.
+    func score(chunks: [String], cases: [Case], k: Int = 3,
+               reranker: MMRReranker? = nil) async throws -> Result {
         guard !chunks.isEmpty, !cases.isEmpty else { return Result(hits: 0, total: cases.count, misses: []) }
         let vectors = try await embedder.embed(chunks)
         let ids = chunks.map { _ in UUID() }
         let candidates = Array(zip(ids, vectors)).map { (id: $0.0, vector: $0.1) }
         let textById = Dictionary(uniqueKeysWithValues: Array(zip(ids, chunks)))
+        let vectorById = Dictionary(uniqueKeysWithValues: Array(zip(ids, vectors)))
 
         var hits = 0
         var misses: [String] = []
         for testCase in cases {
             guard let queryVector = try await embedder.embed([testCase.query]).first else { continue }
-            let top = search.topK(query: queryVector, candidates: candidates, k: k)
-            let matched = top.contains {
-                (textById[$0.id] ?? "").localizedCaseInsensitiveContains(testCase.expectedContains)
+            let finalIds: [UUID]
+            if let reranker {
+                let pool = search.topK(query: queryVector, candidates: candidates, k: max(k * 4, k))
+                let poolVectors = pool.compactMap { p in vectorById[p.id].map { (id: p.id, vector: $0) } }
+                finalIds = reranker.rerank(query: queryVector, candidates: poolVectors, k: k)
+            } else {
+                finalIds = search.topK(query: queryVector, candidates: candidates, k: k).map(\.id)
+            }
+            let matched = finalIds.contains {
+                (textById[$0] ?? "").localizedCaseInsensitiveContains(testCase.expectedContains)
             }
             if matched { hits += 1 } else { misses.append(testCase.query) }
         }
