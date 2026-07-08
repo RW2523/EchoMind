@@ -22,15 +22,22 @@ final class VoiceSessionController {
     private let input: any VoiceInput
     private let synthesizer: any SpeechSynthesizing
     private let onQuestion: (String) async -> String?
+    /// V2: streaming answer producer. When set, the answer is spoken
+    /// sentence-by-sentence as it generates; otherwise the whole answer is spoken.
+    private let onQuestionStream: ((String) -> AsyncThrowingStream<String, Error>)?
 
     private var listenTask: Task<Void, Never>?
+    private var answerTask: Task<Void, Never>?
+    private var sentenceContinuation: AsyncStream<String>.Continuation?
 
     init(input: any VoiceInput,
          synthesizer: any SpeechSynthesizing,
-         onQuestion: @escaping (String) async -> String?) {
+         onQuestion: @escaping (String) async -> String?,
+         onQuestionStream: ((String) -> AsyncThrowingStream<String, Error>)? = nil) {
         self.input = input
         self.synthesizer = synthesizer
         self.onQuestion = onQuestion
+        self.onQuestionStream = onQuestionStream
     }
 
     var isActive: Bool { state != .idle }
@@ -53,7 +60,8 @@ final class VoiceSessionController {
         }
     }
 
-    /// Stop listening, run the question through `onQuestion`, and speak the answer.
+    /// Stop listening, run the question, and speak the answer — streaming
+    /// sentence-by-sentence when a streaming producer is available.
     func finishAndAsk() async {
         guard state == .listening else { return }
         listenTask?.cancel()
@@ -62,8 +70,16 @@ final class VoiceSessionController {
         let trimmed = question.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { state = .idle; return }
 
+        if let onQuestionStream {
+            await speakStreaming(onQuestionStream(trimmed))
+        } else {
+            await speakOneShot(trimmed)
+        }
+    }
+
+    private func speakOneShot(_ question: String) async {
         state = .thinking
-        let answer = await onQuestion(trimmed)
+        let answer = await onQuestion(question)
         guard state == .thinking else { return }          // cancelled while thinking
         guard let answer, !answer.isEmpty else { state = .idle; return }
 
@@ -73,9 +89,39 @@ final class VoiceSessionController {
         state = .idle
     }
 
-    /// Barge-out / abort from any state: stop STT + TTS and reset.
+    /// V2: consume the cumulative answer stream on a producer task, chunk it into
+    /// sentences, and speak them sequentially as they complete.
+    private func speakStreaming(_ stream: AsyncThrowingStream<String, Error>) async {
+        state = .thinking
+        let (sentences, continuation) = AsyncStream<String>.makeStream()
+        sentenceContinuation = continuation
+        answerTask = Task {
+            var chunker = SentenceChunker()
+            do {
+                for try await cumulative in stream {
+                    for sentence in chunker.push(cumulative: cumulative) { continuation.yield(sentence) }
+                }
+            } catch {}
+            if let tail = chunker.flush() { continuation.yield(tail) }
+            continuation.finish()
+        }
+
+        for await sentence in sentences {
+            if state == .thinking { state = .speaking }
+            guard state == .speaking else { break }       // cancelled
+            await synthesizer.speak(sentence)
+        }
+        answerTask = nil
+        sentenceContinuation = nil
+        guard state == .speaking || state == .thinking else { return }
+        state = .idle
+    }
+
+    /// Barge-out / abort from any state: stop STT + TTS + generation and reset.
     func cancel() {
         listenTask?.cancel()
+        answerTask?.cancel()
+        sentenceContinuation?.finish()
         synthesizer.stop()
         let input = self.input
         Task { _ = await input.stop() }                   // best-effort STT teardown

@@ -113,10 +113,13 @@ listening strip. Voice turns join the same chat history/bubbles as typed chat.
 6 controller tests (full turn, empty transcript, nil answer, start-failure, cancel-
 during-speaking); 204 total green. Device-verify mic capture + spoken output next.
 
-### V2 — Streaming + sentence-by-sentence speech
-`StreamingModelGateway` (Apple FM + MLX), sentence chunker, RAG streaming path
-(`askStreaming` alongside `ask`), TTS consumes sentences as they arrive.
-**Gate:** first audio ≤ 2.4 s after end of turn (measured, logged in TESTLOG.md).
+### V2 — Streaming + sentence-by-sentence speech — SHIPPED (device-latency-verify pending)
+DONE: `StreamingModelGateway` (Apple FM real streaming via `streamResponse`;
+RoutingModelGateway forwards to the picked backend, one-shot fallback otherwise),
+`SentenceChunker` (pure, 8 golden tests), `StreamingRAGService`/`RAGPipeline.askStreaming`
+(same retrieval, spoken-prose streamed), controller producer/consumer speaks sentences
+as they complete, `AskViewModel.askVoiceStream` persists bubbles. 213 total green.
+**Gate (device):** first audio ≤ 2.4 s after end of turn — measure on device, log in TESTLOG.md.
 
 ### V3 — Hands-free + barge-in (device-only validation)
 `SpeechDetector` VAD endpointing (auto end-of-turn), voice-processing echo

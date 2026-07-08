@@ -57,3 +57,23 @@ nonisolated struct RoutingModelGateway: ModelGateway {
         }
     }
 }
+
+extension RoutingModelGateway: StreamingModelGateway {
+    func stream(instructions: String, prompt: String, maxOutputTokens: Int) -> AsyncThrowingStream<String, Error> {
+        AsyncThrowingStream { continuation in
+            let task = Task {
+                do {
+                    let gateway = try await select()
+                    let source = (gateway as? StreamingModelGateway)?
+                        .stream(instructions: instructions, prompt: prompt, maxOutputTokens: maxOutputTokens)
+                        ?? gateway.oneShotStream(instructions: instructions, prompt: prompt, maxOutputTokens: maxOutputTokens)
+                    for try await chunk in source { continuation.yield(chunk) }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+}

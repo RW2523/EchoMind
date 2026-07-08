@@ -28,7 +28,8 @@ struct AskView: View {
                                            permissions: dependencies.permissions,
                                            assets: dependencies.speechAssets)
                 voice = VoiceSessionController(input: input, synthesizer: SystemSpeechSynthesizer(),
-                                               onQuestion: { question in await vm.askVoice(question) })
+                                               onQuestion: { question in await vm.askVoice(question) },
+                                               onQuestionStream: { question in vm.askVoiceStream(question) })
             }
         }
     }

@@ -21,6 +21,24 @@ nonisolated protocol RAGService: Sendable {
     func ask(_ question: String, history: [ChatTurn]) async throws -> AskResult
 }
 
+/// Optional streaming capability for the voice agent (V2). Yields the cumulative
+/// spoken answer as it generates, so TTS can start on sentence one. Checked with
+/// `as? StreamingRAGService`, so `RAGService` stays unchanged for other callers.
+nonisolated protocol StreamingRAGService: Sendable {
+    func askStreaming(_ question: String, history: [ChatTurn]) -> AsyncThrowingStream<String, Error>
+}
+
+extension AskResult {
+    /// Plain text to speak / show for any result kind.
+    var spokenText: String {
+        switch self {
+        case .grounded(let answer, _, _): return answer
+        case .conversational(let answer, _): return answer
+        case .retrievalOnly: return "Here's what I found in your knowledge."
+        }
+    }
+}
+
 nonisolated enum RAGPrompts {
     static let hybrid = """
     You are EchoMind, a friendly, concise assistant. Below is the conversation so \
@@ -35,6 +53,15 @@ nonisolated enum RAGPrompts {
     Rewrite the user's latest message into a single standalone search query using \
     the conversation for context (resolve pronouns like "it" or "they"). Output ONLY \
     the query text, nothing else.
+    """
+
+    /// Voice answers are spoken aloud: concise plain prose, no markdown, no lists,
+    /// no citations — one or two short paragraphs at most.
+    static let voiceProse = """
+    You are EchoMind, a warm, concise voice assistant. Answer the latest message in \
+    natural spoken prose — no markdown, bullet points, or headings. Use the Context \
+    if it's relevant, preserving names, numbers, and dates exactly; otherwise answer \
+    from general knowledge. Keep it brief and easy to listen to.
     """
 
     static func prompt(memory: String, question: String, context: String) -> String {
@@ -203,6 +230,48 @@ nonisolated struct RAGPipeline: RAGService {
         case .appleIntelligenceNotEnabled: return "Enable Apple Intelligence in iOS Settings for AI answers."
         case .modelNotReady: return "The on-device model is preparing."
         case .unknown: return "AI answers aren't available right now."
+        }
+    }
+}
+
+extension RAGPipeline: StreamingRAGService {
+    /// Streams a spoken-prose answer (V2). Same retrieval as `ask`, but emits the
+    /// answer token-by-token via the gateway's streaming capability (one-shot
+    /// fallback for non-streaming backends). No follow-ups/citations — voice output.
+    func askStreaming(_ question: String, history: [ChatTurn]) -> AsyncThrowingStream<String, Error> {
+        AsyncThrowingStream { continuation in
+            let task = Task {
+                do {
+                    let trimmed = question.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard budgeter.tokens(in: trimmed) <= Self.questionTokenLimit else {
+                        throw RAGError.questionTooLong
+                    }
+                    // Tier B: no generator — fall back to the one-shot result text.
+                    if case .tierB = await availability() {
+                        continuation.yield(try await ask(trimmed, history: history).spokenText)
+                        continuation.finish()
+                        return
+                    }
+                    let stored = try await chunks.fetchAll()
+                    let searchQuery = history.isEmpty ? trimmed : await rewrite(trimmed, history: history)
+                    let retrieved = stored.isEmpty ? [] : try await hybridRetrieve(searchQuery, from: stored)
+                    let memory = Self.memory(from: history)
+                    let packed = packChunks(retrieved, question: trimmed, memory: memory)
+                    let context = packed.enumerated()
+                        .map { "[\($0.offset + 1)] \($0.element.chunk.text)" }
+                        .joined(separator: "\n\n")
+                    let prompt = RAGPrompts.prompt(memory: memory, question: trimmed, context: context)
+
+                    let source = (gateway as? StreamingModelGateway)?
+                        .stream(instructions: RAGPrompts.voiceProse, prompt: prompt, maxOutputTokens: Self.outputReserve)
+                        ?? gateway.oneShotStream(instructions: RAGPrompts.voiceProse, prompt: prompt, maxOutputTokens: Self.outputReserve)
+                    for try await chunk in source { continuation.yield(chunk) }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+            continuation.onTermination = { _ in task.cancel() }
         }
     }
 }

@@ -31,6 +31,7 @@ private final class MockSynthesizer: SpeechSynthesizing {
     let available: Bool
     let blockUntilStopped: Bool
     private(set) var spokenText: String?
+    private(set) var spokenTexts: [String] = []
     private(set) var stopped = false
     private var continuation: CheckedContinuation<Void, Never>?
 
@@ -43,6 +44,7 @@ private final class MockSynthesizer: SpeechSynthesizing {
 
     func speak(_ text: String) async {
         spokenText = text
+        spokenTexts.append(text)
         if blockUntilStopped {
             await withCheckedContinuation { self.continuation = $0 }
         }
@@ -120,6 +122,28 @@ private final class QuestionSink {
                                                 onQuestion: sink.handle)
         await controller.startListening()
         if case .failed = controller.state {} else { Issue.record("expected .failed, got \(controller.state)") }
+    }
+
+    @Test func streamingSpeaksSentencesInOrder() async {
+        let input = MockVoiceInput(final: "tell me a story")
+        let synth = MockSynthesizer()
+        let controller = VoiceSessionController(
+            input: input, synthesizer: synth,
+            onQuestion: { _ in nil },
+            onQuestionStream: { _ in
+                AsyncThrowingStream { continuation in
+                    continuation.yield("Once upon a time.")
+                    continuation.yield("Once upon a time. The end.")
+                    continuation.yield("Once upon a time. The end. Bye now")
+                    continuation.finish()
+                }
+            })
+
+        await controller.startListening()
+        await controller.finishAndAsk()
+
+        #expect(synth.spokenTexts == ["Once upon a time.", "The end.", "Bye now"])
+        #expect(controller.state == .idle)
     }
 
     @Test func cancelDuringSpeakingStopsAndIdles() async {
