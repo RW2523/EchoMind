@@ -279,6 +279,11 @@ Rough total: **8–10 focused weeks**, each milestone independently shippable.
     in Xcode, then device-download a model and verify local inference with Apple
     Intelligence off. Reconcile `MLXEngine.swift` if the MLX API drifted. Extend the
     network-audit test with the downloader-only allowlist once the package is present.
+- **P17 (audio retention + tap-to-play): SHIPPED (device-verify pending).** AAC capture
+  teed off the transcription stream (best-effort, never breaks recording), on-disk
+  AudioStore, on-by-default retention toggle (G3), SessionDetail player + scrubber +
+  tap-a-line-to-seek, storage accounting + wipe/delete coverage. 183 tests green.
+  Unblocks M3 FluidAudio (diarization now has real audio to run on).
 - **P16 (retrieval quality): SHIPPED.** MMR diversity reranking (`MMRReranker`, λ=0.7)
   wired into `RAGPipeline` hybrid retrieval (fused pool→MMR→top-6; BM25-only exact hits
   preserved). Measured: diversity win proven deterministically (MMRRerankerTests);

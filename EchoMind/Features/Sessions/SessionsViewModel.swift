@@ -5,9 +5,11 @@ import Foundation
 final class SessionsViewModel {
     private(set) var sessions: [SessionSnapshot] = []
     private let repository: any SessionRepository
+    private let audioStore: AudioStore
 
-    init(repository: any SessionRepository) {
+    init(repository: any SessionRepository, audioStore: AudioStore = AudioStore()) {
         self.repository = repository
+        self.audioStore = audioStore
     }
 
     func load() async {
@@ -23,7 +25,10 @@ final class SessionsViewModel {
     }
 
     func delete(ids: [UUID]) async {
-        for id in ids { try? await repository.delete(id: id) }
+        for id in ids {
+            try? await repository.delete(id: id)
+            audioStore.remove(id)   // P17: drop the retained recording too
+        }
         await load()
     }
 }

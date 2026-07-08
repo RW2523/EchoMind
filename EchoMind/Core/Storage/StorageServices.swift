@@ -19,6 +19,7 @@ nonisolated struct DefaultStorageUsageService: StorageUsageService {
     let sessions: any SessionRepository
     let documents: any DocumentRepository
     let chunks: any ChunkRepository
+    var audioStore = AudioStore()
 
     func usage() async throws -> StorageUsage {
         var sessionsBytes: Int64 = 0
@@ -31,7 +32,8 @@ nonisolated struct DefaultStorageUsageService: StorageUsageService {
             .reduce(Int64(0)) { $0 + Int64($1.textContent.utf8.count) }
         let indexBytes = try await chunks.fetchAll()
             .reduce(Int64(0)) { $0 + Int64($1.text.utf8.count + $1.embedding.count) }
-        return StorageUsage(sessionsBytes: sessionsBytes, documentsBytes: documentsBytes, indexBytes: indexBytes)
+        return StorageUsage(sessionsBytes: sessionsBytes, documentsBytes: documentsBytes,
+                            indexBytes: indexBytes, audioBytes: audioStore.totalBytes())
     }
 }
 
@@ -99,11 +101,13 @@ nonisolated struct DefaultDataWipeService: DataWipeService {
     let documents: any DocumentRepository
     let chunks: any ChunkRepository
     let chat: any ChatRepository
+    var audioStore = AudioStore()
 
     func deleteAllData() async throws {
         for session in try await sessions.fetchAll() { try await sessions.delete(id: session.id) }
         for document in try await documents.fetchAll() { try await documents.delete(id: document.id) }
         try await chunks.deleteAll()
         try await chat.deleteAll()
+        audioStore.removeAll()   // P17: retained audio is on disk, not in SwiftData
     }
 }

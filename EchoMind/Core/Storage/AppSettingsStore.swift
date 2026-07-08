@@ -22,12 +22,14 @@ final class AppSettingsStore {
     var preferredLocale: String? { settings().preferredLocale }
     var embeddingDimension: Int? { settings().embeddingDimension }
     var lastIndexRebuild: Date? { settings().lastIndexRebuild }
+    var audioRetentionEnabled: Bool { settings().audioRetentionEnabled }
 
     func setOnboardingComplete(_ value: Bool) { mutate { $0.onboardingComplete = value } }
     func setConsentAcknowledged(_ value: Bool) { mutate { $0.consentAcknowledged = value } }
     func setPreferredLocale(_ value: String?) { mutate { $0.preferredLocale = value } }
     func setEmbeddingDimension(_ value: Int?) { mutate { $0.embeddingDimension = value } }
     func setLastIndexRebuild(_ value: Date?) { mutate { $0.lastIndexRebuild = value } }
+    func setAudioRetentionEnabled(_ value: Bool) { mutate { $0.audioRetentionEnabled = value } }
 
     // MARK: - Single-row fetch-or-create
 

@@ -24,7 +24,9 @@ struct LiveTranscriptView: View {
                     assets: dependencies.speechAssets,
                     sessions: dependencies.sessionRepository,
                     permissions: dependencies.permissions,
-                    indexer: dependencies.indexer)
+                    indexer: dependencies.indexer,
+                    retainAudio: dependencies.settingsStore.audioRetentionEnabled,
+                    audioStore: dependencies.audioStore)
             }
         }
     }

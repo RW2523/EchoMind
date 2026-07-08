@@ -19,16 +19,19 @@ final class SessionDetailViewModel {
     private let repository: any SessionRepository
     private let summarizer: any SummarizerService
     private let availability: any AvailabilityProviding
+    private let audioStore: AudioStore
 
     init(session: SessionSnapshot,
          repository: any SessionRepository,
          summarizer: any SummarizerService,
-         availability: any AvailabilityProviding) {
+         availability: any AvailabilityProviding,
+         audioStore: AudioStore = AudioStore()) {
         self.session = session
         self.draftTitle = session.title
         self.repository = repository
         self.summarizer = summarizer
         self.availability = availability
+        self.audioStore = audioStore
     }
 
     func load() async {
@@ -88,6 +91,7 @@ final class SessionDetailViewModel {
 
     func delete() async {
         try? await repository.delete(id: session.id)
+        audioStore.remove(session.id)   // P17: drop the retained recording too
     }
 
     var markdownExport: SessionExport {

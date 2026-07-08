@@ -38,6 +38,8 @@ final class AppDependencies {
     let dataWipeService: any DataWipeService
     /// Held strongly so the store outlives every context/repository derived from it.
     let modelContainer: ModelContainer
+    /// Shared on-disk audio store (P17) — same directory used by capture + playback.
+    let audioStore = AudioStore()
 
     /// Mirrors `settingsStore.onboardingComplete` but observable, so flipping it
     /// on completion re-renders `RootView` without an async flash (§2.7).

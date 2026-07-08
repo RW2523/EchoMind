@@ -41,7 +41,8 @@ struct SessionsView: View {
         .navigationTitle("Sessions")
         .task {
             if model == nil {
-                let vm = SessionsViewModel(repository: dependencies.sessionRepository)
+                let vm = SessionsViewModel(repository: dependencies.sessionRepository,
+                                           audioStore: dependencies.audioStore)
                 model = vm
                 await vm.load()
             }

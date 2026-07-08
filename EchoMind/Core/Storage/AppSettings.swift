@@ -11,14 +11,18 @@ final class AppSettings {
     var preferredLocale: String?
     var lastIndexRebuild: Date?
     var embeddingDimension: Int?
+    /// P17 (gate G3): keep session audio for playback. ON by default. Additive
+    /// property with a default → SwiftData lightweight-migrates existing rows.
+    var audioRetentionEnabled: Bool = true
 
     init(onboardingComplete: Bool = false, consentAcknowledged: Bool = false,
          preferredLocale: String? = nil, lastIndexRebuild: Date? = nil,
-         embeddingDimension: Int? = nil) {
+         embeddingDimension: Int? = nil, audioRetentionEnabled: Bool = true) {
         self.onboardingComplete = onboardingComplete
         self.consentAcknowledged = consentAcknowledged
         self.preferredLocale = preferredLocale
         self.lastIndexRebuild = lastIndexRebuild
         self.embeddingDimension = embeddingDimension
+        self.audioRetentionEnabled = audioRetentionEnabled
     }
 }

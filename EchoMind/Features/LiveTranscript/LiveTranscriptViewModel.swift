@@ -42,11 +42,14 @@ final class LiveTranscriptViewModel {
     private let permissions: any PermissionManaging
     private let indexer: (any IndexerService)?
     private let locale: Locale
+    private let retainAudio: Bool
+    private let audioStore: AudioStore
 
     private var sessionId: UUID?
     private var startedAt: Date?
     private var eventTask: Task<Void, Never>?
     private var updateTask: Task<Void, Never>?
+    private var audioWriter: AudioFileWriter?
 
     init(audio: any AudioCapturing,
          transcription: any TranscriptionService,
@@ -54,6 +57,8 @@ final class LiveTranscriptViewModel {
          sessions: any SessionRepository,
          permissions: any PermissionManaging,
          indexer: (any IndexerService)? = nil,
+         retainAudio: Bool = false,
+         audioStore: AudioStore = AudioStore(),
          locale: Locale = .current) {
         self.audio = audio
         self.transcription = transcription
@@ -61,6 +66,8 @@ final class LiveTranscriptViewModel {
         self.sessions = sessions
         self.permissions = permissions
         self.indexer = indexer
+        self.retainAudio = retainAudio
+        self.audioStore = audioStore
         self.locale = locale
     }
 
@@ -103,7 +110,12 @@ final class LiveTranscriptViewModel {
 
         do {
             let buffers = try await audio.start()
-            let updates = try await transcription.start(locale: locale, audio: buffers)
+            // P17: tee the capture stream to an AAC file when retention is on. The
+            // write completes before each buffer is forwarded, so the transcriber
+            // and writer never read the buffer concurrently. Best-effort — a writer
+            // failure never interrupts transcription.
+            let recordingBuffers = makeRetainedStream(buffers, sessionId: id)
+            let updates = try await transcription.start(locale: locale, audio: recordingBuffers)
             startEventLoop()
             startUpdateLoop(updates)
             phase = .recording
@@ -149,6 +161,38 @@ final class LiveTranscriptViewModel {
         } catch {
             phase = .failed(.assetDownloadFailed(String(describing: error)))
             return false
+        }
+    }
+
+    // MARK: - Audio retention (P17)
+
+    private func makeRetainedStream(_ buffers: AsyncThrowingStream<AudioBufferBox, Error>,
+                                    sessionId: UUID) -> AsyncThrowingStream<AudioBufferBox, Error> {
+        guard retainAudio, let url = try? audioStore.prepareURL(for: sessionId) else { return buffers }
+        let writer = AudioFileWriter(url: url)
+        audioWriter = writer
+        return Self.tee(buffers) { box in await writer.write(box.buffer) }
+    }
+
+    /// Forwards a stream while running `sideEffect` on each element first. The
+    /// side-effect completes before the element is delivered downstream, so the
+    /// buffer is never read concurrently by writer and transcriber.
+    private static func tee(_ source: AsyncThrowingStream<AudioBufferBox, Error>,
+                            sideEffect: @escaping @Sendable (AudioBufferBox) async -> Void)
+        -> AsyncThrowingStream<AudioBufferBox, Error> {
+        AsyncThrowingStream { continuation in
+            let task = Task {
+                do {
+                    for try await box in source {
+                        await sideEffect(box)
+                        continuation.yield(box)
+                    }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+            continuation.onTermination = { _ in task.cancel() }
         }
     }
 
@@ -231,6 +275,10 @@ final class LiveTranscriptViewModel {
     }
 
     private func finalize() async {
+        if let audioWriter {
+            _ = await audioWriter.finish()
+            self.audioWriter = nil
+        }
         guard let sessionId, let startedAt else { return }
         try? await sessions.update(
             SessionSnapshot(id: sessionId, title: Self.defaultTitle(startedAt),

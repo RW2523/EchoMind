@@ -71,10 +71,21 @@ struct SettingsView: View {
                 }
             }
 
+            Section {
+                Toggle("Keep audio recordings", isOn: Binding(
+                    get: { model.audioRetentionEnabled },
+                    set: { model.setAudioRetention($0) }))
+            } header: {
+                Text("Recording Audio")
+            } footer: {
+                Text("Save each session's audio on-device so you can play it back and tap a line to jump there. Turning this off doesn't delete audio you've already kept.")
+            }
+
             Section("Storage") {
                 usageRow("Sessions", model.usage.sessionsBytes)
                 usageRow("Documents", model.usage.documentsBytes)
                 usageRow("Search index", model.usage.indexBytes)
+                usageRow("Audio", model.usage.audioBytes)
                 usageRow("Total", model.usage.totalBytes).fontWeight(.semibold)
             }
 
