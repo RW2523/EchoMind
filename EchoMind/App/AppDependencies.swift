@@ -45,7 +45,9 @@ final class AppDependencies {
         let chunkRepo = SwiftDataChunkRepository(modelContainer: container)
         self.chunkRepository = chunkRepo
         self.documentImporter = DefaultDocumentImportService(documents: docRepository)
-        let embedder = NLContextualEmbeddingService()
+        // V2: NLEmbedding.sentenceEmbedding works in the simulator AND on device
+        // (the NLContextualEmbedding E5 model won't compile in the simulator).
+        let embedder = NLEmbeddingService()
         self.embeddingService = embedder
         self.vectorSearch = VectorSearch()
         self.indexer = RAGIndexer(documents: docRepository, sessions: sessionRepo,

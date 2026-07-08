@@ -15,6 +15,7 @@ struct DebugStorageSection: View {
             Button("Insert dummy session") { Task { await insertDummy() } }
             Button("Insert + index sample document") { Task { await insertSampleDocument() } }
             Button("Insert 9,000-word fixture") { Task { await insertFixture() } }
+            Button("Run retrieval eval") { Task { await runEval() } }
             Button("Fetch counts") { Task { await fetchCounts() } }
             Button("Delete dummy sessions", role: .destructive) { Task { await deleteDummies() } }
             Text(status)
@@ -37,6 +38,18 @@ struct DebugStorageSection: View {
             status = "Inserted session + 3 segments"
         } catch {
             status = "Insert failed: \(error)"
+        }
+    }
+
+    private func runEval() async {
+        let eval = RetrievalEval(embedder: dependencies.embeddingService, search: dependencies.vectorSearch)
+        let suite = RetrievalEval.handbookSuite()
+        do {
+            let result = try await eval.score(chunks: suite.chunks, cases: suite.cases, k: 3)
+            status = "Retrieval eval: \(result.hits)/\(result.total) (\(Int(result.score * 100))%)"
+                + (result.misses.isEmpty ? "" : " · missed: \(result.misses.joined(separator: "; "))")
+        } catch {
+            status = "Eval failed: \(error)"
         }
     }
 
