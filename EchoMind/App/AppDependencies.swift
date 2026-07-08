@@ -20,6 +20,7 @@ final class AppDependencies {
     let modelGateway: any ModelGateway
     let availabilityMonitor: any AvailabilityProviding
     let aiSettings: AISettingsStore
+    let modelDownloader: any ModelDownloadService
     let summarizer: any SummarizerService
     let documentImporter: any DocumentImportService
     let embeddingService: any EmbeddingService
@@ -68,6 +69,11 @@ final class AppDependencies {
         self.availabilityMonitor = monitor
         let aiSettings = AISettingsStore()
         self.aiSettings = aiSettings
+        #if canImport(MLXLLM)
+        self.modelDownloader = MLXModelDownloader()
+        #else
+        self.modelDownloader = UnavailableModelDownloadService()
+        #endif
         // Routed gateway (V2 §B4): Apple FM primary, local LLM when downloaded,
         // retrieval-only otherwise. `local` stays nil until the Phase 15 downloader
         // provides an engine; the router then never routes local. Summarizer and RAG

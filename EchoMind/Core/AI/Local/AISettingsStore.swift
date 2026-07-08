@@ -13,11 +13,13 @@ final class AISettingsStore {
         static let preference = "ai.preference"
         static let selectedModel = "ai.selectedModelID"
         static let downloaded = "ai.downloadedModelIDs"
+        static let downloadConsent = "ai.modelDownloadConsent"
     }
 
     private var _preference: AIPreference
     private var _selectedModelID: String
     private var _downloaded: Set<String>
+    private var _downloadConsent: Bool
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -25,6 +27,14 @@ final class AISettingsStore {
             .flatMap(AIPreference.init(rawValue:)) ?? .auto
         _selectedModelID = defaults.string(forKey: Key.selectedModel) ?? LocalModelCatalog.default.id
         _downloaded = Set(defaults.stringArray(forKey: Key.downloaded) ?? [])
+        _downloadConsent = defaults.bool(forKey: Key.downloadConsent)
+    }
+
+    /// Whether the user has accepted the one-time "weights download uses the
+    /// network" consent. Nothing downloads before this is true.
+    var downloadConsentGiven: Bool {
+        get { _downloadConsent }
+        set { _downloadConsent = newValue; defaults.set(newValue, forKey: Key.downloadConsent) }
     }
 
     var preference: AIPreference {

@@ -48,6 +48,14 @@ struct SettingsView: View {
                 }
             }
 
+            Section("On-Device AI") {
+                NavigationLink {
+                    AIModelsView()
+                } label: {
+                    Label("AI Models", systemImage: "cpu")
+                }
+            }
+
             Section("Transcription Language") {
                 if model.locales.isEmpty {
                     Text(model.preferredLocaleIdentifier).foregroundStyle(.secondary)
