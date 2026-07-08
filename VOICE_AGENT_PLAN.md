@@ -100,13 +100,18 @@ wow) and keep hands-free behind a debug flag until it does.
 
 ## 4. Phases
 
-### V1 — Push-to-talk voice ask (no new packages; buildable + simulator-testable now)
+### V1 — Push-to-talk voice ask — SHIPPED (device-verify pending)
 Mic button in Ask → hold/tap to talk (SpeechTranscriber) → release/auto-stop →
 existing `ask()` → answer spoken via **AVSpeechSynthesizer** + shown as a normal
 chat bubble. Includes: `SpeechSynthesizing` seam + system implementation,
 `VoiceSessionController` (states: idle/listening/thinking/speaking, no barge-in
 yet), voice UI (mic button, listening indicator, speaking indicator, tap-to-stop).
-**Gate:** voice question → grounded spoken answer end-to-end in the simulator.
+**Gate:** voice question → grounded spoken answer end-to-end. DONE: `SpeechSynthesizing`
++ `SystemSpeechSynthesizer`, `VoiceInput` + `LiveVoiceInput`, `VoiceSessionController`
+state machine (listen→think→speak, cancel from any state), Ask mic button + live
+listening strip. Voice turns join the same chat history/bubbles as typed chat.
+6 controller tests (full turn, empty transcript, nil answer, start-failure, cancel-
+during-speaking); 204 total green. Device-verify mic capture + spoken output next.
 
 ### V2 — Streaming + sentence-by-sentence speech
 `StreamingModelGateway` (Apple FM + MLX), sentence chunker, RAG streaming path

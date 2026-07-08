@@ -64,6 +64,37 @@ final class AskViewModel {
         await send()
     }
 
+    /// Voice entry point (Voice Agent V1): runs the same pipeline for a spoken
+    /// `question`, updates the chat thread with bubbles, and returns the answer
+    /// text to speak aloud (nil if nothing to say).
+    func askVoice(_ question: String) async -> String? {
+        let trimmed = question.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, state == .idle else { return nil }
+
+        let history = messages.map { ChatTurn(role: $0.role, content: $0.content) }
+        let userMessage = ChatMessageSnapshot(conversationId: conversationId, role: .user, content: trimmed)
+        try? await chat.append(userMessage)
+        messages.append(await render(userMessage))
+
+        state = .thinking
+        defer { state = .idle }
+
+        do {
+            let result = try await rag.ask(trimmed, history: history)
+            let message = await persist(result)
+            messages.append(message)
+            return message.content
+        } catch RAGError.questionTooLong {
+            let text = "That question is too long. Try asking something shorter."
+            await appendAssistant(text)
+            return text
+        } catch {
+            let text = "Something went wrong answering that. Please try again."
+            await appendAssistant(text)
+            return text
+        }
+    }
+
     /// The most recent assistant message's suggested follow-ups, if any.
     var suggestedFollowUps: [String] {
         guard state == .idle, let last = messages.last, last.role == .assistant else { return [] }
