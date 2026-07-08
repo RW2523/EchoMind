@@ -66,4 +66,12 @@ import Foundation
         let b = AISettingsStore(defaults: d)
         #expect(b.selectedEmbeddingModelID == nil)
     }
+
+    @Test func voiceSelectionDefaultsToBuiltInAndPersists() {
+        let d = freshDefaults()
+        let a = AISettingsStore(defaults: d)
+        #expect(a.selectedVoiceModelID == nil)          // built-in system voice
+        a.selectedVoiceModelID = "kokoro-82m"
+        #expect(AISettingsStore(defaults: d).selectedVoiceModelID == "kokoro-82m")
+    }
 }

@@ -16,6 +16,7 @@ final class AIModelsViewModel {
     let models = LocalModelCatalog.all
     var chatModels: [LocalModel] { models.filter { $0.kind == .chat } }
     var embeddingModels: [LocalModel] { models.filter { $0.kind == .embedding } }
+    var voiceModels: [LocalModel] { models.filter { $0.kind == .tts } }
     private let downloader: any ModelDownloadService
     private let settings: AISettingsStore
 
@@ -57,6 +58,12 @@ final class AIModelsViewModel {
     func useBuiltInEmbedder() {
         settings.selectedEmbeddingModelID = nil
     }
+
+    // MARK: - Voice model (V4)
+
+    var selectedVoiceModelID: String? { settings.selectedVoiceModelID }
+    func useForVoice(_ model: LocalModel) { settings.selectedVoiceModelID = model.id }
+    func useBuiltInVoice() { settings.selectedVoiceModelID = nil }
 
     /// Entry point from the UI — routes through consent the first time.
     func requestDownload(_ model: LocalModel) {

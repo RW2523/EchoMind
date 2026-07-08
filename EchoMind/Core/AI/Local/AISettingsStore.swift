@@ -16,6 +16,7 @@ final class AISettingsStore {
         static let downloadConsent = "ai.modelDownloadConsent"
         static let selectedEmbeddingModel = "ai.selectedEmbeddingModelID"
         static let activeEmbedderIdentity = "ai.activeEmbedderIdentity"
+        static let selectedVoiceModel = "ai.selectedVoiceModelID"
     }
 
     private var _preference: AIPreference
@@ -24,6 +25,7 @@ final class AISettingsStore {
     private var _downloadConsent: Bool
     private var _selectedEmbeddingModelID: String?
     private var _activeEmbedderIdentity: String?
+    private var _selectedVoiceModelID: String?
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -34,6 +36,17 @@ final class AISettingsStore {
         _downloadConsent = defaults.bool(forKey: Key.downloadConsent)
         _selectedEmbeddingModelID = defaults.string(forKey: Key.selectedEmbeddingModel)
         _activeEmbedderIdentity = defaults.string(forKey: Key.activeEmbedderIdentity)
+        _selectedVoiceModelID = defaults.string(forKey: Key.selectedVoiceModel)
+    }
+
+    /// Selected TTS voice id, or nil to use the built-in AVSpeechSynthesizer voice.
+    var selectedVoiceModelID: String? {
+        get { _selectedVoiceModelID }
+        set {
+            _selectedVoiceModelID = newValue
+            if let newValue { defaults.set(newValue, forKey: Key.selectedVoiceModel) }
+            else { defaults.removeObject(forKey: Key.selectedVoiceModel) }
+        }
     }
 
     /// Selected embedding-model id, or nil to use built-in NLEmbedding.

@@ -59,4 +59,9 @@ import Testing
     @Test func defaultIsAChatModel() {
         #expect(LocalModelCatalog.default.kind == .chat)
     }
+
+    @Test func catalogHasVoiceModels() {
+        #expect(LocalModelCatalog.voiceModels.allSatisfy { $0.kind == .tts })
+        #expect(!LocalModelCatalog.voiceModels.isEmpty)
+    }
 }

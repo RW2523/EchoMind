@@ -26,22 +26,30 @@ final class VoiceSessionController {
     /// sentence-by-sentence as it generates; otherwise the whole answer is spoken.
     private let onQuestionStream: ((String) -> AsyncThrowingStream<String, Error>)?
 
+    private let now: @Sendable () -> TimeInterval
+
     private var listenTask: Task<Void, Never>?
     private var answerTask: Task<Void, Never>?
     private var sentenceContinuation: AsyncStream<String>.Continuation?
+    private var endpointTimer: Task<Void, Never>?
+    private var handsFree = false
+    private var endpointer = TurnEndpointer()
 
     init(input: any VoiceInput,
          synthesizer: any SpeechSynthesizing,
          onQuestion: @escaping (String) async -> String?,
-         onQuestionStream: ((String) -> AsyncThrowingStream<String, Error>)? = nil) {
+         onQuestionStream: ((String) -> AsyncThrowingStream<String, Error>)? = nil,
+         now: @escaping @Sendable () -> TimeInterval = { Date().timeIntervalSinceReferenceDate }) {
         self.input = input
         self.synthesizer = synthesizer
         self.onQuestion = onQuestion
         self.onQuestionStream = onQuestionStream
+        self.now = now
     }
 
     var isActive: Bool { state != .idle }
     var canSpeak: Bool { synthesizer.isAvailable }
+    var isHandsFree: Bool { handsFree }
 
     /// Begin capturing speech and streaming partial transcripts to the UI.
     func startListening() async {
@@ -119,6 +127,9 @@ final class VoiceSessionController {
 
     /// Barge-out / abort from any state: stop STT + TTS + generation and reset.
     func cancel() {
+        handsFree = false
+        endpointTimer?.cancel()
+        endpointTimer = nil
         listenTask?.cancel()
         answerTask?.cancel()
         sentenceContinuation?.finish()
@@ -127,5 +138,81 @@ final class VoiceSessionController {
         Task { _ = await input.stop() }                   // best-effort STT teardown
         partialTranscript = ""
         state = .idle
+    }
+
+    // MARK: - Hands-free (V3)
+
+    /// Enter continuous conversation: listen → auto-endpoint → answer → listen …
+    func startConversation() async {
+        guard state == .idle else { return }
+        handsFree = true
+        await beginListenTurn()
+    }
+
+    func stopConversation() { cancel() }
+
+    /// User starts speaking while the agent is talking: stop TTS + generation and
+    /// (hands-free) immediately open a fresh turn.
+    func bargeIn() {
+        guard state == .speaking || state == .thinking else { return }
+        answerTask?.cancel()
+        sentenceContinuation?.finish()
+        synthesizer.stop()
+        state = .idle
+        if handsFree { Task { await beginListenTurn() } }
+    }
+
+    private func beginListenTurn() async {
+        guard handsFree else { return }
+        endpointer.reset()
+        partialTranscript = ""
+        do {
+            let partials = try await input.start()
+            state = .listening
+            listenTask = Task { [weak self] in
+                for await partial in partials {
+                    guard let self else { return }
+                    self.partialTranscript = partial
+                    self.endpointer.update(transcript: partial, now: self.now())
+                }
+            }
+            startEndpointTimer()
+        } catch {
+            state = .failed("Couldn't start listening. Check microphone access.")
+            handsFree = false
+        }
+    }
+
+    private func startEndpointTimer() {
+        endpointTimer?.cancel()
+        endpointTimer = Task { [weak self] in
+            while true {
+                guard let self, self.handsFree, self.state == .listening else { return }
+                if self.endpointer.shouldEndTurn(now: self.now()) {
+                    self.endpointTimer = nil
+                    await self.autoFinishTurn()
+                    return
+                }
+                try? await Task.sleep(for: .milliseconds(150))
+            }
+        }
+    }
+
+    private func autoFinishTurn() async {
+        guard state == .listening else { return }
+        listenTask?.cancel()
+        let question = await input.stop()
+        partialTranscript = ""
+        let trimmed = question.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            if handsFree { await beginListenTurn() } else { state = .idle }
+            return
+        }
+        if let onQuestionStream {
+            await speakStreaming(onQuestionStream(trimmed))
+        } else {
+            await speakOneShot(trimmed)
+        }
+        if handsFree, state == .idle { await beginListenTurn() }
     }
 }

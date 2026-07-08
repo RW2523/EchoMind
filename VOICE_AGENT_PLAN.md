@@ -121,13 +121,13 @@ RoutingModelGateway forwards to the picked backend, one-shot fallback otherwise)
 as they complete, `AskViewModel.askVoiceStream` persists bubbles. 213 total green.
 **Gate (device):** first audio ≤ 2.4 s after end of turn — measure on device, log in TESTLOG.md.
 
-### V3 — Hands-free + barge-in (device-only validation)
+### V3 — Hands-free + barge-in — SHIPPED (device-only validation pending)
 `SpeechDetector` VAD endpointing (auto end-of-turn), voice-processing echo
 cancellation, mic-open-while-speaking, interruption cancels TTS + generation.
 **Gate:** 10-turn hands-free conversation; barge-in works with TTS at full volume;
 no self-transcription of the agent's own voice.
 
-### V4 — Kokoro TTS upgrade (needs package + human)
+### V4 — Kokoro TTS upgrade — CODE-COMPLETE (needs package + human)
 `KokoroSynthesizer` behind `#if canImport`, `ModelKind.tts` catalog row +
 Model Manager section ("Voice"), `af_heart` default, AVSpeech remains the floor
 whenever weights aren't downloaded. **Gate:** A/B against AVSpeech on device;

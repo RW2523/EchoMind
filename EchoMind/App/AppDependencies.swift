@@ -155,6 +155,32 @@ final class AppDependencies {
         embeddingIndexStale = false
     }
 
+    /// Resolve the TTS voice for the voice agent (V4): downloaded Kokoro if linked +
+    /// selected, else the built-in AVSpeech voice.
+    func makeSpeechSynthesizer() -> any SpeechSynthesizing {
+        let choice = SpeechSynthesizerResolver().choice(
+            selectedVoiceModelID: aiSettings.selectedVoiceModelID,
+            isDownloaded: { aiSettings.isDownloaded($0) },
+            packageLinked: Self.ttsPackageLinked)
+        switch choice {
+        case .systemAV:
+            return SystemSpeechSynthesizer()
+        case .kokoro(let id):
+            #if canImport(FluidAudioTTS)
+            if let model = LocalModelCatalog.model(id: id) { return KokoroSynthesizer(model: model) }
+            #endif
+            return SystemSpeechSynthesizer()
+        }
+    }
+
+    private static var ttsPackageLinked: Bool {
+        #if canImport(FluidAudioTTS)
+        return true
+        #else
+        return false
+        #endif
+    }
+
     private static var embeddersPackageLinked: Bool {
         #if canImport(MLXEmbedders)
         return true

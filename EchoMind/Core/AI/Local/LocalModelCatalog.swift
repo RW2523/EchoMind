@@ -6,6 +6,7 @@ import Foundation
 nonisolated enum ModelKind: String, Sendable, Equatable {
     case chat
     case embedding
+    case tts
 }
 
 /// Metadata for a downloadable on-device model (V2 §B3). The catalog is data, not
@@ -75,10 +76,22 @@ nonisolated enum LocalModelCatalog {
             contextSize: 768,           // output vector dimension
             parameterHint: "300M · retrieval embeddings",
             isDefault: false),
+
+        // MARK: Text-to-speech (V4 — Kokoro; upgrades AVSpeechSynthesizer)
+        LocalModel(
+            id: "kokoro-82m",
+            kind: .tts,
+            displayName: "Kokoro 82M",
+            huggingFaceRepo: "mlx-community/Kokoro-82M-4bit",
+            approxDownloadMB: 90,
+            contextSize: 0,             // n/a for TTS
+            parameterHint: "82M · warm “af_heart” voice",
+            isDefault: false),
     ]
 
     static let chatModels: [LocalModel] = all.filter { $0.kind == .chat }
     static let embeddingModels: [LocalModel] = all.filter { $0.kind == .embedding }
+    static let voiceModels: [LocalModel] = all.filter { $0.kind == .tts }
 
     /// Default chat model (the LLM engine's fallback selection).
     static let `default`: LocalModel = chatModels.first(where: \.isDefault) ?? chatModels[0]

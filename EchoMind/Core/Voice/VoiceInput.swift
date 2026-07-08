@@ -51,6 +51,8 @@ final class LiveVoiceInput: VoiceInput {
         finalized = ""
         volatile = ""
 
+        // V3: echo cancellation so the mic doesn't transcribe the agent's own TTS.
+        await audio.setVoiceProcessing(true)
         let buffers = try await audio.start()
         let updates: AsyncThrowingStream<TranscriptionUpdate, Error>
         do {

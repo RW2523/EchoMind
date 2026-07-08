@@ -94,6 +94,17 @@ struct AIModelsView: View {
             } footer: {
                 Text("The model that turns your notes into searchable vectors. Built-in works everywhere with no download; EmbeddingGemma is more accurate. Switching takes effect after you restart and rebuild the index.")
             }
+
+            if !model.voiceModels.isEmpty {
+                Section {
+                    voiceRow(builtInSelected: model.selectedVoiceModelID == nil, model: model)
+                    ForEach(model.voiceModels) { item in modelRow(item, model: model) }
+                } header: {
+                    Text("Voice")
+                } footer: {
+                    Text("The spoken voice for the voice assistant. Built-in (system) works everywhere; Kokoro is warmer and more natural.")
+                }
+            }
         }
         .alert("Download this model?", isPresented: $model.showConsent) {
             Button("Cancel", role: .cancel) { model.cancelConsent() }
@@ -101,6 +112,34 @@ struct AIModelsView: View {
         } message: {
             Text("Model weights are fetched once from Hugging Face over the network. After that, everything runs fully on-device — nothing you record or ask ever leaves your iPhone.")
         }
+    }
+
+    private func useLabel(for kind: ModelKind) -> String {
+        switch kind {
+        case .chat: return "Use this model"
+        case .embedding: return "Use for search"
+        case .tts: return "Use this voice"
+        }
+    }
+
+    private func voiceRow(builtInSelected: Bool, model: AIModelsViewModel) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text("Built-in voice").font(.headline)
+                    if builtInSelected {
+                        Image(systemName: "checkmark.circle.fill").foregroundStyle(DS.brand).font(.caption)
+                    }
+                }
+                Text("System voice · on-device, no download").font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+            if !builtInSelected {
+                Button("Use") { model.useBuiltInVoice() }
+                    .font(.caption).buttonStyle(.bordered)
+            }
+        }
+        .padding(.vertical, 4)
     }
 
     private func embeddingRow(builtInSelected: Bool, model: AIModelsViewModel) -> some View {
@@ -126,9 +165,13 @@ struct AIModelsView: View {
     @ViewBuilder
     private func modelRow(_ item: LocalModel, model: AIModelsViewModel) -> some View {
         let state = model.state(for: item)
-        let isSelected = item.kind == .chat
-            ? model.selectedModelID == item.id
-            : model.selectedEmbeddingModelID == item.id
+        let isSelected: Bool = {
+            switch item.kind {
+            case .chat: return model.selectedModelID == item.id
+            case .embedding: return model.selectedEmbeddingModelID == item.id
+            case .tts: return model.selectedVoiceModelID == item.id
+            }
+        }()
         VStack(alignment: .leading, spacing: DS.sm) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
@@ -151,8 +194,12 @@ struct AIModelsView: View {
                 Text(msg).font(.caption).foregroundStyle(.red)
             }
             if case .ready = state, !isSelected {
-                Button(item.kind == .chat ? "Use this model" : "Use for search") {
-                    if item.kind == .chat { model.select(item) } else { model.useForSearch(item) }
+                Button(useLabel(for: item.kind)) {
+                    switch item.kind {
+                    case .chat: model.select(item)
+                    case .embedding: model.useForSearch(item)
+                    case .tts: model.useForVoice(item)
+                    }
                 }
                 .font(.caption).buttonStyle(.bordered)
             }

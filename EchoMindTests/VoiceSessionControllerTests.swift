@@ -146,6 +146,23 @@ private final class QuestionSink {
         #expect(controller.state == .idle)
     }
 
+    @Test func bargeInDuringSpeakingStopsAndIdles() async {
+        let input = MockVoiceInput(final: "question")
+        let synth = MockSynthesizer(blockUntilStopped: true)
+        let sink = QuestionSink(answer: "a long spoken answer")
+        let controller = VoiceSessionController(input: input, synthesizer: synth, onQuestion: sink.handle)
+
+        await controller.startListening()
+        let task = Task { await controller.finishAndAsk() }
+        for _ in 0..<50 where controller.state != .speaking { await Task.yield() }
+        #expect(controller.state == .speaking)
+
+        controller.bargeIn()
+        await task.value
+        #expect(synth.stopped)
+        #expect(controller.state == .idle)
+    }
+
     @Test func cancelDuringSpeakingStopsAndIdles() async {
         let input = MockVoiceInput(final: "question")
         let synth = MockSynthesizer(blockUntilStopped: true)

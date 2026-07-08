@@ -27,7 +27,7 @@ struct AskView: View {
                                            transcription: dependencies.transcriptionService,
                                            permissions: dependencies.permissions,
                                            assets: dependencies.speechAssets)
-                voice = VoiceSessionController(input: input, synthesizer: SystemSpeechSynthesizer(),
+                voice = VoiceSessionController(input: input, synthesizer: dependencies.makeSpeechSynthesizer(),
                                                onQuestion: { question in await vm.askVoice(question) },
                                                onQuestionStream: { question in vm.askVoiceStream(question) })
             }
@@ -106,13 +106,19 @@ struct AskView: View {
                 }
             }
             Spacer()
-            if voice.state == .listening {
+            if voice.state == .listening && !voice.isHandsFree {
                 Button {
                     Task { await voice.finishAndAsk() }
                 } label: {
                     Image(systemName: "checkmark.circle.fill").font(.title2).foregroundStyle(DS.brand)
                 }
                 .accessibilityLabel("Finish and ask")
+            }
+            if voice.state == .speaking && voice.isHandsFree {
+                Button { voice.bargeIn() } label: {
+                    Image(systemName: "hand.raised.fill").font(.title3).foregroundStyle(DS.brand)
+                }
+                .accessibilityLabel("Interrupt")
             }
             Button { voice.cancel() } label: {
                 Image(systemName: "xmark.circle.fill").font(.title2).foregroundStyle(.secondary)
@@ -132,6 +138,13 @@ struct AskView: View {
                 .lineLimit(1...4)
                 .onSubmit { Task { await model.send() } }
             if let voice, voice.canSpeak, !voice.isActive, model.draft.trimmingCharacters(in: .whitespaces).isEmpty {
+                Button {
+                    Task { await voice.startConversation() }
+                } label: {
+                    Image(systemName: "waveform.badge.mic").font(.title2)
+                }
+                .accessibilityLabel("Hands-free conversation")
+                .disabled(model.state == .thinking)
                 Button {
                     Task { await voice.startListening() }
                 } label: {
