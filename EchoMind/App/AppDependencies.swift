@@ -19,6 +19,7 @@ final class AppDependencies {
     let tokenBudgeter: TokenBudgeter
     let modelGateway: any ModelGateway
     let availabilityMonitor: any AvailabilityProviding
+    let aiSettings: AISettingsStore
     let summarizer: any SummarizerService
     let documentImporter: any DocumentImportService
     let embeddingService: any EmbeddingService
@@ -62,15 +63,33 @@ final class AppDependencies {
         self.transcriptionService = SpeechAnalyzerTranscriber()
         self.speechAssets = SpeechAssetManager()
         let budgeter = TokenBudgeter()
-        let gateway = FoundationModelService()
         self.tokenBudgeter = budgeter
-        self.modelGateway = gateway
-        self.summarizer = MapReduceSummarizer(gateway: gateway, budgeter: budgeter)
         let monitor = ModelAvailabilityMonitor()
         self.availabilityMonitor = monitor
+        let aiSettings = AISettingsStore()
+        self.aiSettings = aiSettings
+        // Routed gateway (V2 §B4): Apple FM primary, local LLM when downloaded,
+        // retrieval-only otherwise. `local` stays nil until the Phase 15 downloader
+        // provides an engine; the router then never routes local. Summarizer and RAG
+        // consume the same `ModelGateway` seam and are unaware routing exists.
+        let routing = RoutingModelGateway(
+            apple: FoundationModelService(),
+            local: nil,
+            router: FeatureRouter(),
+            context: {
+                await MainActor.run {
+                    RoutingModelGateway.Context(
+                        availability: monitor.status,
+                        localModelID: aiSettings.localModelID,
+                        preference: aiSettings.preference,
+                        thermal: ThermalLevel(processInfo: ProcessInfo.processInfo.thermalState))
+                }
+            })
+        self.modelGateway = routing
+        self.summarizer = MapReduceSummarizer(gateway: routing, budgeter: budgeter)
         self.ragService = RAGPipeline(
             chunks: chunkRepo, embedder: embedder, search: VectorSearch(),
-            gateway: gateway, budgeter: budgeter,
+            gateway: routing, budgeter: budgeter,
             availability: { await MainActor.run { monitor.status } })
         let store = AppSettingsStore(container: container)
         self.settingsStore = store
