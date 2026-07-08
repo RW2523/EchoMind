@@ -92,18 +92,17 @@ tests stay, no other code depends on it.
 Each package sits behind exactly one file. Swapping an engine (e.g. llama.cpp) or a
 store = one new conformer; nothing else changes.
 
-## FluidAudio (M3 diarization) + Kokoro TTS (Voice V4)
+## Kokoro TTS (Voice Agent V4 — the warm "af_heart" voice)
 
-- **Diarization repo:** https://github.com/FluidInference/FluidAudio — product **FluidAudio**.
-  Lights up `FluidAudioDiarizer` (`#if canImport(FluidAudio)`). Speaker labels on
-  retained recordings; models load/download on first use.
-- **TTS:** guarded separately on **`#if canImport(FluidAudioTTS)`** so adding the
-  diarization package does NOT force-compile the TTS path against a mismatched API.
-  Add the FluidAudio TTS product (verify exact module name at add time) or an
-  mlx-audio Kokoro package, then reconcile `KokoroSynthesizer.synthesize`.
+- **Guard:** `#if canImport(FluidAudioTTS)` — deliberately a **different** module
+  from the diarization `FluidAudio` above, so adding the diarization package does
+  NOT force-compile the TTS path against a mismatched API. Only linking a TTS
+  product activates `KokoroSynthesizer`.
+- **Product to add:** the FluidAudio TTS product (verify the exact module name at
+  add time — this space moves fast) or an mlx-audio Kokoro package. Then reconcile
+  `KokoroSynthesizer.synthesize` — the single package-specific call.
 - **Model:** Kokoro-82M (`af_heart`) downloads through the existing Model Manager
-  (Settings ▸ On-Device AI ▸ Voice), consent-gated. AVSpeechSynthesizer stays the
-  floor until Kokoro is downloaded + linked.
-- **Steps:** same as MLX — File ▸ Add Package Dependencies ▸ paste URL ▸ add product
-  to the EchoMind target ▸ build. All conformers are behind `#if canImport`, so the
-  app builds today without any of them.
+  (Settings ▸ On-Device AI ▸ **Voice**), consent-gated. `AVSpeechSynthesizer` stays
+  the floor until Kokoro is downloaded + linked, so voice output always works.
+- **Seam file:** `Core/Voice/KokoroSynthesizer.swift` (the only `FluidAudioTTS`
+  importer); resolution logic in `Core/Voice/SpeechSynthesizerResolver.swift`.
