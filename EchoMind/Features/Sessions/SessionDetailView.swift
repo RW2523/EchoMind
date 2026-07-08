@@ -21,7 +21,8 @@ struct SessionDetailView: View {
                     repository: dependencies.sessionRepository,
                     summarizer: dependencies.summarizer,
                     availability: dependencies.availabilityMonitor,
-                    audioStore: dependencies.audioStore)
+                    audioStore: dependencies.audioStore,
+                    diarizer: dependencies.diarizer)
                 model = vm
                 await vm.load()
             }
@@ -49,7 +50,7 @@ private struct SessionDetailContent: View {
                     AudioPlayerBar(playback: playback)
                 }
             }
-            Section("Transcript") {
+            Section {
                 if model.segments.isEmpty {
                     Text("No transcript").foregroundStyle(.secondary)
                 } else {
@@ -62,6 +63,15 @@ private struct SessionDetailContent: View {
                         } else {
                             TranscriptSegmentRow(segment: segment)
                         }
+                    }
+                }
+            } header: {
+                HStack {
+                    Text("Transcript")
+                    if model.isIdentifyingSpeakers {
+                        Spacer()
+                        ProgressView().controlSize(.small)
+                        Text("Identifying speakers…").font(.caption).textCase(nil)
                     }
                 }
             }
@@ -82,6 +92,15 @@ private struct SessionDetailContent: View {
                     ShareLink(item: model.textExport,
                               preview: SharePreview(model.session.title)) {
                         Label("Export as Text", systemImage: "doc.plaintext")
+                    }
+                    if model.canIdentifySpeakers {
+                        Divider()
+                        Button {
+                            Task { await model.identifySpeakers() }
+                        } label: {
+                            Label("Identify Speakers", systemImage: "person.2.wave.2")
+                        }
+                        .disabled(model.isIdentifyingSpeakers)
                     }
                     Divider()
                     Button { showRename = true } label: { Label("Rename", systemImage: "pencil") }

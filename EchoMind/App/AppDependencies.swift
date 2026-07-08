@@ -40,6 +40,14 @@ final class AppDependencies {
     let modelContainer: ModelContainer
     /// Shared on-disk audio store (P17) — same directory used by capture + playback.
     let audioStore = AudioStore()
+    /// Speaker diarization (M3) — real only when the FluidAudio package is linked.
+    let diarizer: any DiarizationService = {
+        #if canImport(FluidAudio)
+        return FluidAudioDiarizer()
+        #else
+        return UnavailableDiarizationService()
+        #endif
+    }()
 
     /// Mirrors `settingsStore.onboardingComplete` but observable, so flipping it
     /// on completion re-renders `RootView` without an async flash (§2.7).

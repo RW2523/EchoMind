@@ -12,7 +12,7 @@ layer** so models are data, not code paths.
 | Conversation (default) | Apple Foundation Model | ✅ **Shipped** — `FoundationModelService` behind `RoutingModelGateway` | None |
 | Conversation (your own) | Qwen via MLX, 4-bit | ✅ **Code-complete** — `MLXEngine`/`LocalLLMGateway`/Model Manager; dormant until package added | M0 (human) + M1 catalog row |
 | Live transcript | SpeechTranscriber / SpeechAnalyzer | ✅ **Shipped in V1** | None |
-| Speaker labels (optional) | FluidAudio | ❌ Not started (= V2_PLAN P20) | M3 spike, kill-criterion |
+| Speaker labels (optional) | FluidAudio | ✅ **Code-complete** — DiarizationService seam + SpeakerLabeler + SessionDetail action; dormant until FluidAudio added | M3 device kill-criterion |
 | RAG embeddings | EmbeddingGemma 300M (~200 MB) | ✅ **Code-complete** — `GemmaEmbeddingService` seam + resolver + Model Manager section; dormant until MLXEmbedders added | M2 device eval |
 | RAG vector store | sqlite-vec | ⚠️ Currently brute-force vDSP cosine (sub-ms at our scale) | **M4 — deferred, trigger-based** |
 
@@ -66,12 +66,16 @@ Remaining (device):
   in Settings ▸ About, and it must remain user-initiated download (already is).
 - Fallback ladder: Gemma downloaded → use it; else NLEmbedding (never a dead app).
 
-### M3 — FluidAudio speaker labels (~2–3 day spike, after P17 audio retention)
-- Third-party package (human adds in Xcode, same ritual as MLX).
-- `DiarizationService` protocol seam; FluidAudio conformer behind `#if canImport`.
-- Depends on P17 (audio retention, approved on-by-default) landing first so the
-  spike can run against real recorded meetings.
-- **Kill criterion (from V2_PLAN):** if label accuracy embarrasses on 3 real
+### M3 — FluidAudio speaker labels — CODE-COMPLETE (pending package + device kill-criterion)
+Built this increment (P17 audio retention landed, so there's real audio to run on):
+- `DiarizationService` seam + `UnavailableDiarizationService` fallback.
+- `SpeakerLabeler` (pure, tested) assigns each transcript segment to the speaker
+  with greatest temporal overlap; deterministic tie-break.
+- `FluidAudioDiarizer` behind `#if canImport(FluidAudio)` — decode/resample to
+  16 kHz mono done here; diarization call is the single reconciliation point.
+- Repo `setSpeakerLabels`; SessionDetail "Identify Speakers" action + labels in rows.
+- 10 new tests; 193 total green.
+- **Kill criterion (unchanged):** if label accuracy embarrasses on 3 real
   multi-speaker recordings, park it — it's a spike, not a commitment.
 
 ### M4 — sqlite-vec (deferred)

@@ -23,4 +23,7 @@ nonisolated protocol SessionRepository: Sendable {
     func search(matching query: String) async throws -> [SessionSnapshot]
     func previewText(sessionID: UUID, maxCharacters: Int) async throws -> String
     func rename(sessionID: UUID, to title: String) async throws
+
+    // M3: persist diarization results (segmentId → speaker label).
+    func setSpeakerLabels(_ labels: [UUID: String], sessionId: UUID) async throws
 }
