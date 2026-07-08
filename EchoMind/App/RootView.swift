@@ -7,14 +7,22 @@ struct RootView: View {
     @Environment(AppDependencies.self) private var dependencies
 
     var body: some View {
-        if dependencies.onboardingComplete {
-            MainTabView()
-        } else {
-            OnboardingView(
-                viewModel: OnboardingViewModel(settingsStore: dependencies.settingsStore) {
-                    dependencies.onboardingComplete = true
-                }
-            )
+        Group {
+            if dependencies.onboardingComplete {
+                MainTabView()
+            } else {
+                OnboardingView(
+                    viewModel: OnboardingViewModel(settingsStore: dependencies.settingsStore) {
+                        dependencies.onboardingComplete = true
+                    }
+                )
+            }
+        }
+        .echoMindStyle()
+        .task {
+            #if DEBUG
+            if CommandLine.arguments.contains("--skip-onboarding") { dependencies.onboardingComplete = true }
+            #endif
         }
     }
 }

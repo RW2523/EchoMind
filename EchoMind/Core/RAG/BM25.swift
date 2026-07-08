@@ -58,11 +58,16 @@ nonisolated struct BM25 {
     /// Reciprocal Rank Fusion of several ID rankings → fused ID → score.
     static func reciprocalRankFusion(_ rankings: [[UUID]], k: Double = 60) -> [(id: UUID, score: Double)] {
         var fused: [UUID: Double] = [:]
+        var order: [UUID] = []               // first-appearance order, for stable ties
         for ranking in rankings {
             for (rank, id) in ranking.enumerated() {
+                if fused[id] == nil { order.append(id) }
                 fused[id, default: 0] += 1.0 / (k + Double(rank + 1))
             }
         }
-        return fused.sorted { $0.value > $1.value }.map { (id: $0.key, score: $0.value) }
+        let position = Dictionary(uniqueKeysWithValues: order.enumerated().map { ($0.element, $0.offset) })
+        return order
+            .map { (id: $0, score: fused[$0] ?? 0) }
+            .sorted { $0.score != $1.score ? $0.score > $1.score : position[$0.id]! < position[$1.id]! }
     }
 }

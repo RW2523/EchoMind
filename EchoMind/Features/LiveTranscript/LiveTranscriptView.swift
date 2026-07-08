@@ -45,6 +45,7 @@ private struct LiveTranscriptContent: View {
             }
             controls
         }
+        .background(BrandBackground())
         .onChange(of: scenePhase) { _, newValue in
             // Unlock catch-up: state is already current; re-render happens here.
             _ = newValue
@@ -56,12 +57,16 @@ private struct LiveTranscriptContent: View {
     @ViewBuilder private var statusBar: some View {
         switch model.phase {
         case .recording, .pausedByInterruption:
-            HStack {
+            VStack(spacing: DS.md) {
+                LiveWaveformView(level: model.level, isActive: model.phase == .recording)
+                    .frame(height: 88)
                 RecordingIndicatorView(elapsed: model.elapsed,
                                        isPaused: model.phase == .pausedByInterruption)
-                Spacer()
-                LevelBar(level: model.level)
+                    .font(.title3.monospacedDigit())
             }
+            .padding(DS.lg)
+            .frame(maxWidth: .infinity)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: DS.rMd, style: .continuous))
             .padding()
         case .preparingAssets(let progress):
             VStack(spacing: 8) {
@@ -125,9 +130,9 @@ private struct LiveTranscriptContent: View {
                 Button {
                     Task { await model.startTapped() }
                 } label: {
-                    Label("Record", systemImage: "record.circle").frame(maxWidth: .infinity)
+                    Label("Record", systemImage: "record.circle")
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(BrandButtonStyle())
                 .disabled(isBusy)
             }
         }

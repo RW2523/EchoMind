@@ -34,9 +34,10 @@ struct AskView: View {
                         ForEach(model.messages) { message in
                             if message.role == .user {
                                 Text(message.content)
-                                    .padding(.horizontal, 12).padding(.vertical, 8)
-                                    .background(.tint, in: RoundedRectangle(cornerRadius: 14))
+                                    .padding(.horizontal, 14).padding(.vertical, 10)
+                                    .background(DS.brandGradient, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
                                     .foregroundStyle(.white)
+                                    .shadow(color: DS.brand.opacity(0.25), radius: 6, y: 3)
                                     .frame(maxWidth: .infinity, alignment: .trailing)
                             } else {
                                 AnswerCardView(message: message)
@@ -80,6 +81,7 @@ struct AskView: View {
             }
             inputBar(model)
         }
+        .background(BrandBackground())
     }
 
     private func inputBar(_ model: AskViewModel) -> some View {

@@ -3,9 +3,7 @@ import SwiftUI
 struct ConsentStepView: View {
     var body: some View {
         VStack(spacing: 20) {
-            Image(systemName: "person.2.wave.2.fill")
-                .font(.system(size: 72))
-                .foregroundStyle(.tint)
+            BrandIconBadge(systemName: "person.2.wave.2.fill")
             Text("Recording responsibly")
                 .font(.title.bold())
                 .multilineTextAlignment(.center)

@@ -23,6 +23,10 @@ struct AnswerCardView: View {
         }
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 12))
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: DS.rMd, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.rMd, style: .continuous)
+                .strokeBorder(.white.opacity(0.08), lineWidth: 0.5))
+        .shadow(color: .black.opacity(0.05), radius: 8, y: 4)
     }
 }
