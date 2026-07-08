@@ -75,12 +75,20 @@ final class AppDependencies {
         self.modelDownloader = UnavailableModelDownloadService()
         #endif
         // Routed gateway (V2 §B4): Apple FM primary, local LLM when downloaded,
-        // retrieval-only otherwise. `local` stays nil until the Phase 15 downloader
-        // provides an engine; the router then never routes local. Summarizer and RAG
-        // consume the same `ModelGateway` seam and are unaware routing exists.
+        // retrieval-only otherwise. The local gateway exists only when the MLX
+        // package is linked; even then the router won't route to it until the
+        // selected model's weights are downloaded (`aiSettings.localModelID`).
+        // Summarizer and RAG consume the same `ModelGateway` seam, unaware of routing.
+        var localGateway: (any ModelGateway)?
+        #if canImport(MLXLLM)
+        let selectedModel = LocalModelCatalog.model(id: aiSettings.selectedModelID) ?? LocalModelCatalog.default
+        localGateway = LocalLLMGateway(engine: MLXEngine(model: selectedModel))
+        #else
+        localGateway = nil
+        #endif
         let routing = RoutingModelGateway(
             apple: FoundationModelService(),
-            local: nil,
+            local: localGateway,
             router: FeatureRouter(),
             context: {
                 await MainActor.run {
