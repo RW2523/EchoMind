@@ -5,6 +5,7 @@ import SwiftUI
 struct AIModelsView: View {
     @Environment(AppDependencies.self) private var dependencies
     @State private var model: AIModelsViewModel?
+    @State private var rebuilding = false
 
     var body: some View {
         Group {
@@ -56,10 +57,42 @@ struct AIModelsView: View {
                 }
             }
 
-            Section("Models") {
-                ForEach(model.models) { item in
+            if dependencies.embeddingIndexStale {
+                Section {
+                    Button {
+                        Task {
+                            rebuilding = true
+                            try? await dependencies.indexer.rebuildAll()
+                            dependencies.markIndexRebuilt()
+                            rebuilding = false
+                        }
+                    } label: {
+                        HStack {
+                            Label("Rebuild search index", systemImage: "arrow.triangle.2.circlepath")
+                            if rebuilding { Spacer(); ProgressView() }
+                        }
+                    }
+                    .disabled(rebuilding)
+                } footer: {
+                    Text("Your embedding model changed. Rebuild the index so search uses the new one.")
+                }
+            }
+
+            Section("Chat models") {
+                ForEach(model.chatModels) { item in
                     modelRow(item, model: model)
                 }
+            }
+
+            Section {
+                embeddingRow(builtInSelected: model.selectedEmbeddingModelID == nil, model: model)
+                ForEach(model.embeddingModels) { item in
+                    modelRow(item, model: model)
+                }
+            } header: {
+                Text("Search embedding")
+            } footer: {
+                Text("The model that turns your notes into searchable vectors. Built-in works everywhere with no download; EmbeddingGemma is more accurate. Switching takes effect after you restart and rebuild the index.")
             }
         }
         .alert("Download this model?", isPresented: $model.showConsent) {
@@ -70,10 +103,32 @@ struct AIModelsView: View {
         }
     }
 
+    private func embeddingRow(builtInSelected: Bool, model: AIModelsViewModel) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text("Built-in embedder").font(.headline)
+                    if builtInSelected {
+                        Image(systemName: "checkmark.circle.fill").foregroundStyle(DS.brand).font(.caption)
+                    }
+                }
+                Text("NLEmbedding · on-device, no download").font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+            if !builtInSelected {
+                Button("Use") { model.useBuiltInEmbedder() }
+                    .font(.caption).buttonStyle(.bordered)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
     @ViewBuilder
     private func modelRow(_ item: LocalModel, model: AIModelsViewModel) -> some View {
         let state = model.state(for: item)
-        let isSelected = model.selectedModelID == item.id
+        let isSelected = item.kind == .chat
+            ? model.selectedModelID == item.id
+            : model.selectedEmbeddingModelID == item.id
         VStack(alignment: .leading, spacing: DS.sm) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
@@ -96,8 +151,10 @@ struct AIModelsView: View {
                 Text(msg).font(.caption).foregroundStyle(.red)
             }
             if case .ready = state, !isSelected {
-                Button("Use this model") { model.select(item) }
-                    .font(.caption).buttonStyle(.bordered)
+                Button(item.kind == .chat ? "Use this model" : "Use for search") {
+                    if item.kind == .chat { model.select(item) } else { model.useForSearch(item) }
+                }
+                .font(.caption).buttonStyle(.bordered)
             }
         }
         .padding(.vertical, 4)

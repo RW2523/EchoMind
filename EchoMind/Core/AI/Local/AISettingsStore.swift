@@ -14,12 +14,16 @@ final class AISettingsStore {
         static let selectedModel = "ai.selectedModelID"
         static let downloaded = "ai.downloadedModelIDs"
         static let downloadConsent = "ai.modelDownloadConsent"
+        static let selectedEmbeddingModel = "ai.selectedEmbeddingModelID"
+        static let activeEmbedderIdentity = "ai.activeEmbedderIdentity"
     }
 
     private var _preference: AIPreference
     private var _selectedModelID: String
     private var _downloaded: Set<String>
     private var _downloadConsent: Bool
+    private var _selectedEmbeddingModelID: String?
+    private var _activeEmbedderIdentity: String?
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -28,6 +32,29 @@ final class AISettingsStore {
         _selectedModelID = defaults.string(forKey: Key.selectedModel) ?? LocalModelCatalog.default.id
         _downloaded = Set(defaults.stringArray(forKey: Key.downloaded) ?? [])
         _downloadConsent = defaults.bool(forKey: Key.downloadConsent)
+        _selectedEmbeddingModelID = defaults.string(forKey: Key.selectedEmbeddingModel)
+        _activeEmbedderIdentity = defaults.string(forKey: Key.activeEmbedderIdentity)
+    }
+
+    /// Selected embedding-model id, or nil to use built-in NLEmbedding.
+    var selectedEmbeddingModelID: String? {
+        get { _selectedEmbeddingModelID }
+        set {
+            _selectedEmbeddingModelID = newValue
+            if let newValue { defaults.set(newValue, forKey: Key.selectedEmbeddingModel) }
+            else { defaults.removeObject(forKey: Key.selectedEmbeddingModel) }
+        }
+    }
+
+    /// Identity of the embedder that built the current index (nil = never indexed).
+    /// Updated after a successful rebuild so staleness is detected on the next launch.
+    var activeEmbedderIdentity: String? {
+        get { _activeEmbedderIdentity }
+        set {
+            _activeEmbedderIdentity = newValue
+            if let newValue { defaults.set(newValue, forKey: Key.activeEmbedderIdentity) }
+            else { defaults.removeObject(forKey: Key.activeEmbedderIdentity) }
+        }
     }
 
     /// Whether the user has accepted the one-time "weights download uses the

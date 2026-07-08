@@ -42,4 +42,28 @@ import Foundation
         let b = AISettingsStore(defaults: d)
         #expect(b.isDownloaded("qwen2.5-3b-instruct-4bit"))
     }
+
+    @Test func embeddingSelectionDefaultsToBuiltIn() {
+        let store = AISettingsStore(defaults: freshDefaults())
+        #expect(store.selectedEmbeddingModelID == nil)   // nil = built-in NLEmbedding
+    }
+
+    @Test func embeddingSelectionAndIdentityPersist() {
+        let d = freshDefaults()
+        let a = AISettingsStore(defaults: d)
+        a.selectedEmbeddingModelID = "embeddinggemma-300m"
+        a.activeEmbedderIdentity = "gemma:embeddinggemma-300m"
+        let b = AISettingsStore(defaults: d)
+        #expect(b.selectedEmbeddingModelID == "embeddinggemma-300m")
+        #expect(b.activeEmbedderIdentity == "gemma:embeddinggemma-300m")
+    }
+
+    @Test func clearingEmbeddingSelectionPersists() {
+        let d = freshDefaults()
+        let a = AISettingsStore(defaults: d)
+        a.selectedEmbeddingModelID = "embeddinggemma-300m"
+        a.selectedEmbeddingModelID = nil
+        let b = AISettingsStore(defaults: d)
+        #expect(b.selectedEmbeddingModelID == nil)
+    }
 }

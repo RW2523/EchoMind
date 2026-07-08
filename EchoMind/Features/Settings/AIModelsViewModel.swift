@@ -14,6 +14,8 @@ final class AIModelsViewModel {
     }
 
     let models = LocalModelCatalog.all
+    var chatModels: [LocalModel] { models.filter { $0.kind == .chat } }
+    var embeddingModels: [LocalModel] { models.filter { $0.kind == .embedding } }
     private let downloader: any ModelDownloadService
     private let settings: AISettingsStore
 
@@ -42,6 +44,19 @@ final class AIModelsViewModel {
     }
 
     func select(_ model: LocalModel) { settings.selectedModelID = model.id }
+
+    // MARK: - Embedding model (M2)
+
+    /// Currently selected search embedder id, or nil = built-in NLEmbedding.
+    var selectedEmbeddingModelID: String? { settings.selectedEmbeddingModelID }
+
+    func useForSearch(_ model: LocalModel) {
+        settings.selectedEmbeddingModelID = model.id
+    }
+
+    func useBuiltInEmbedder() {
+        settings.selectedEmbeddingModelID = nil
+    }
 
     /// Entry point from the UI — routes through consent the first time.
     func requestDownload(_ model: LocalModel) {

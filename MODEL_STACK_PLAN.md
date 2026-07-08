@@ -13,7 +13,7 @@ layer** so models are data, not code paths.
 | Conversation (your own) | Qwen via MLX, 4-bit | ✅ **Code-complete** — `MLXEngine`/`LocalLLMGateway`/Model Manager; dormant until package added | M0 (human) + M1 catalog row |
 | Live transcript | SpeechTranscriber / SpeechAnalyzer | ✅ **Shipped in V1** | None |
 | Speaker labels (optional) | FluidAudio | ❌ Not started (= V2_PLAN P20) | M3 spike, kill-criterion |
-| RAG embeddings | EmbeddingGemma 308M (~200 MB) | ⚠️ Currently `NLEmbeddingService` (0 MB, works, eval-gated ≥ 0.6) | M2 — the big quality lever |
+| RAG embeddings | EmbeddingGemma 300M (~200 MB) | ✅ **Code-complete** — `GemmaEmbeddingService` seam + resolver + Model Manager section; dormant until MLXEmbedders added | M2 device eval |
 | RAG vector store | sqlite-vec | ⚠️ Currently brute-force vDSP cosine (sub-ms at our scale) | **M4 — deferred, trigger-based** |
 
 Two rows I recommend adjusting:
@@ -43,8 +43,15 @@ Two rows I recommend adjusting:
   mlx-community first); keep 1.5B as the older-device default.
 - Gate: model downloads, loads, and answers a guided-JSON generation on device.
 
-### M2 — EmbeddingGemma embeddings (~3–5 days) ← the highest-value item
-Replaces NLEmbedding as the retrieval brain. Plan:
+### M2 — EmbeddingGemma embeddings — CODE-COMPLETE (pending package + device eval)
+Replaces NLEmbedding as the retrieval brain. Built this increment:
+- `EmbedderResolver` (pure, tested) picks built-in NL vs downloaded Gemma; NL is the floor.
+- `GemmaEmbeddingService` behind `#if canImport(MLXEmbedders)`; L2-normalizes locally.
+- `ModelKind` + EmbeddingGemma catalog row; Model Manager "Search embedding" section.
+- Embedder-identity tracking → auto "rebuild index" prompt when you switch embedders.
+- 12 new tests; 177 total green.
+
+Remaining (device):
 - `GemmaEmbeddingService: EmbeddingService` — runs EmbeddingGemma-308M via MLX
   (`MLXEmbedders`), behind the same `#if canImport` guard as the LLM. ~200 MB,
   downloaded through the existing Model Manager + consent flow (new catalog

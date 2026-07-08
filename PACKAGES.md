@@ -8,10 +8,15 @@ no telemetry, vetted, and behind a swappable seam.
 ## MLX Swift (Phase 14)
 
 - **Repo:** https://github.com/ml-explore/mlx-swift-examples
-- **Products to add:** `MLXLLM`, `MLXLMCommon` (transitively pulls in `mlx-swift`)
+- **Products to add:** `MLXLLM`, `MLXLMCommon`, **`MLXEmbedders`** (transitively pulls in `mlx-swift`)
 - **Why:** Apple's own Metal-backed array/inference framework. Runs 4-bit quantized
-  small LLMs (Qwen2.5-1.5B etc.) on the Neural Engine/GPU. No server, no telemetry.
-- **License:** MIT.
+  small LLMs (Qwen2.5-1.5B etc.) on the Neural Engine/GPU, and — via `MLXEmbedders`
+  — the EmbeddingGemma-300M retrieval embedder (M2). No server, no telemetry.
+- **License:** MIT (EmbeddingGemma weights carry Gemma terms — user-initiated
+  download, attribution shown in-app; never bundled).
+- **What lights up when added:** `MLXEngine` (chat), `MLXModelDownloader`, and
+  `GemmaEmbeddingService` (embeddings) — all behind `#if canImport`. Reconcile
+  `MLXEngine.swift` / `GemmaEmbeddingService.rawEmbed` if the MLX API drifted.
 
 ### One-time Xcode setup (must be done by a human — CC cannot edit `.xcodeproj`)
 

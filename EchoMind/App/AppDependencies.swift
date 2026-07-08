@@ -21,6 +21,11 @@ final class AppDependencies {
     let availabilityMonitor: any AvailabilityProviding
     let aiSettings: AISettingsStore
     let modelDownloader: any ModelDownloadService
+    /// Identity of the embedder resolved this launch (M2) — recorded after a rebuild.
+    let embedderIdentity: String
+    /// True when the active index was built by a different embedder than the one
+    /// resolved this launch (e.g. user switched to EmbeddingGemma) → rebuild needed.
+    var embeddingIndexStale: Bool
     let summarizer: any SummarizerService
     let documentImporter: any DocumentImportService
     let embeddingService: any EmbeddingService
@@ -47,9 +52,23 @@ final class AppDependencies {
         let chunkRepo = SwiftDataChunkRepository(modelContainer: container)
         self.chunkRepository = chunkRepo
         self.documentImporter = DefaultDocumentImportService(documents: docRepository)
-        // V2: NLEmbedding.sentenceEmbedding works in the simulator AND on device
-        // (the NLContextualEmbedding E5 model won't compile in the simulator).
-        let embedder = NLEmbeddingService()
+        let aiSettings = AISettingsStore()
+        self.aiSettings = aiSettings
+        // M2: resolve the embedder — built-in NLEmbedding by default (0 MB, works
+        // in the simulator), upgraded to a downloaded EmbeddingGemma when selected.
+        // NLEmbedding is the floor so RAG is never dead.
+        let embedderChoice = EmbedderResolver().choice(
+            selectedEmbeddingModelID: aiSettings.selectedEmbeddingModelID,
+            isDownloaded: { aiSettings.isDownloaded($0) },
+            packageLinked: Self.embeddersPackageLinked)
+        self.embedderIdentity = embedderChoice.identity
+        self.embeddingIndexStale = EmbedderResolver().needsRebuild(
+            choice: embedderChoice, activeIdentity: aiSettings.activeEmbedderIdentity)
+        // First launch adopts the current embedder as the index's identity.
+        if aiSettings.activeEmbedderIdentity == nil {
+            aiSettings.activeEmbedderIdentity = embedderChoice.identity
+        }
+        let embedder = Self.makeEmbedder(choice: embedderChoice)
         self.embeddingService = embedder
         self.vectorSearch = VectorSearch()
         self.indexer = RAGIndexer(documents: docRepository, sessions: sessionRepo,
@@ -67,8 +86,6 @@ final class AppDependencies {
         self.tokenBudgeter = budgeter
         let monitor = ModelAvailabilityMonitor()
         self.availabilityMonitor = monitor
-        let aiSettings = AISettingsStore()
-        self.aiSettings = aiSettings
         #if canImport(MLXLLM)
         self.modelDownloader = MLXModelDownloader()
         #else
@@ -108,6 +125,35 @@ final class AppDependencies {
         let store = AppSettingsStore(container: container)
         self.settingsStore = store
         self.onboardingComplete = store.onboardingComplete
+    }
+
+    /// Call after a successful index rebuild: records the current embedder as the
+    /// one that built the index and clears the stale flag.
+    func markIndexRebuilt() {
+        aiSettings.activeEmbedderIdentity = embedderIdentity
+        embeddingIndexStale = false
+    }
+
+    private static var embeddersPackageLinked: Bool {
+        #if canImport(MLXEmbedders)
+        return true
+        #else
+        return false
+        #endif
+    }
+
+    private static func makeEmbedder(choice: EmbedderChoice) -> any EmbeddingService {
+        switch choice {
+        case .builtInNL:
+            return NLEmbeddingService()
+        case .gemma(let id):
+            #if canImport(MLXEmbedders)
+            if let model = LocalModelCatalog.model(id: id) {
+                return GemmaEmbeddingService(model: model)
+            }
+            #endif
+            return NLEmbeddingService()
+        }
     }
 
     static func live() throws -> AppDependencies {

@@ -80,7 +80,7 @@ struct SettingsView: View {
 
             Section("Knowledge Index") {
                 Button {
-                    Task { await model.rebuild() }
+                    Task { await model.rebuild(); dependencies.markIndexRebuilt() }
                 } label: {
                     HStack {
                         Label("Rebuild Index", systemImage: "arrow.clockwise")
