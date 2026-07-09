@@ -5,7 +5,7 @@ import SwiftUI
 struct HomeView: View {
     @Environment(AppDependencies.self) private var dependencies
     @State private var model: HomeViewModel?
-    @State private var appeared = false
+    @Namespace private var heroNamespace
 
     var body: some View {
         ScrollView {
@@ -53,6 +53,7 @@ struct HomeView: View {
     private var primaryAction: some View {
         NavigationLink {
             LiveTranscriptView()
+                .navigationTransition(.zoom(sourceID: "record", in: heroNamespace))
         } label: {
             HStack(spacing: DS.lg) {
                 ZStack {
@@ -81,6 +82,7 @@ struct HomeView: View {
             .glow(DS.brand, radius: 14)
         }
         .buttonStyle(PressableStyle())
+        .matchedTransitionSource(id: "record", in: heroNamespace)
     }
 
     private func quickAction<Destination: View>(title: String, subtitle: String, icon: String,
