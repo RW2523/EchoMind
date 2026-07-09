@@ -22,6 +22,23 @@ private func fact(_ text: String, _ kind: MemoryFactKind = .general, at t: TimeI
         #expect(all.first?.text == "Phoenix ships Q3")   // newest first
     }
 
+    @Test func addDeduplicatesAgainstStoredFacts() async throws {
+        let store = try store()
+        try await store.add([fact("Sam leads design", .person, at: 100)])
+        // Same fact re-distilled from a later meeting (different casing/whitespace).
+        try await store.add([fact("  sam LEADS design ", .person, at: 300)])
+        let all = try await store.all()
+        #expect(all.count == 1)                                  // no duplicate row
+        #expect(all.first?.updatedAt == Date(timeIntervalSince1970: 300))   // recency refreshed
+    }
+
+    @Test func addDeduplicatesWithinBatch() async throws {
+        let store = try store()
+        try await store.add([fact("Phoenix ships Q3", .project, at: 10),
+                             fact("phoenix ships q3", .project, at: 20)])
+        #expect(try await store.count() == 1)
+    }
+
     @Test func retireMatchesCaseInsensitively() async throws {
         let store = try store()
         try await store.add([fact("Sam leads design", .person, at: 100)])
@@ -58,7 +75,7 @@ private func fact(_ text: String, _ kind: MemoryFactKind = .general, at t: TimeI
 private struct StubMemoryGateway: ModelGateway {
     let update: MemoryUpdate
     func respond(instructions: String, prompt: String, maxOutputTokens: Int) async throws -> String { "" }
-    func generate<T: Generable & Sendable>(instructions: String, prompt: String, as type: T.Type) async throws -> T {
+    func generate<T: Generable & Sendable>(instructions: String, prompt: String, as type: T.Type, maxOutputTokens: Int) async throws -> T {
         update as! T
     }
 }

@@ -15,11 +15,23 @@ struct EchoMindApp: App {
         }
     }
 
+    private static var isDemoOrScreenshotLaunch: Bool {
+        let args = CommandLine.arguments
+        return args.contains("--demo-seed") || args.contains("--screen")
+    }
+
     var body: some Scene {
         WindowGroup {
             if let dependencies {
                 RootView()
                     .environment(dependencies)
+                    // R1 hardening: recover reports stranded by an interrupted or
+                    // AI-unavailable earlier launch. Skipped for the demo/screenshot
+                    // flows so their seeded state stays deterministic.
+                    .task {
+                        guard !Self.isDemoOrScreenshotLaunch else { return }
+                        await dependencies.reportReconciler.reconcile()
+                    }
                     #if DEBUG
                     .task { await AskSelfTest.runIfRequested(dependencies) }
                     .task { await DemoSeed.runIfRequested(dependencies) }

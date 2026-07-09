@@ -28,6 +28,8 @@ final class AppDependencies {
     var embeddingIndexStale: Bool
     let summarizer: any SummarizerService
     let reportGenerator: any ReportGenerating
+    /// Recovers reports stranded by an interrupted/failed/AI-unavailable launch (R1 hardening).
+    let reportReconciler: any ReportReconciling
     let memoryStore: any MemoryStore
     let documentImporter: any DocumentImportService
     let embeddingService: any EmbeddingService
@@ -150,10 +152,14 @@ final class AppDependencies {
         let distiller = MemoryDistiller(gateway: routing, store: memoryStore)
         let continuity = MeetingContinuityService(
             sessions: sessionRepo, chunks: chunkRepo, embedder: embedder, gateway: routing)
-        self.reportGenerator = ReportPipeline(
+        let report = ReportPipeline(
             sessions: sessionRepo, summarizer: summarizer,
             availability: { await MainActor.run { monitor.status } },
             grouping: grouping, distiller: distiller, continuity: continuity)
+        self.reportGenerator = report
+        self.reportReconciler = ReportReconciler(
+            sessions: sessionRepo, reportGenerator: report,
+            availability: { await MainActor.run { monitor.status } })
         self.ragService = RAGPipeline(
             chunks: chunkRepo, embedder: embedder, search: VectorSearch(),
             gateway: routing, budgeter: budgeter,

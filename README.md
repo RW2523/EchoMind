@@ -9,7 +9,7 @@
 ![Platform](https://img.shields.io/badge/iOS-26-black?logo=apple)
 ![Swift](https://img.shields.io/badge/Swift-6-orange?logo=swift)
 ![UI](https://img.shields.io/badge/SwiftUI%20%2B%20SwiftData-blue)
-![Tests](https://img.shields.io/badge/tests-261%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-274%20passing-brightgreen)
 ![Network](https://img.shields.io/badge/network-zero-success)
 ![Privacy](https://img.shields.io/badge/data%20collected-none-success)
 
@@ -95,7 +95,7 @@ xcodebuild -scheme EchoMind -destination 'platform=iOS Simulator,name=iPhone 17 
   -only-testing:EchoMindTests -parallel-testing-enabled NO test
 ```
 
-**261 tests** cover the pure logic exhaustively — clustering (order-invariant), chunking,
+**274 tests** cover the pure logic exhaustively — clustering (order-invariant), chunking,
 token budgeting, memory distillation, RAG fusion, the voice state machine, and the
 zero-network audit. Anything touching mic/speech/on-device models is device-only.
 

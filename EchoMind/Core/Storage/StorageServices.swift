@@ -40,6 +40,9 @@ nonisolated struct DefaultStorageUsageService: StorageUsageService {
 nonisolated struct DefaultDataExportService: DataExportService {
     let sessions: any SessionRepository
     let documents: any DocumentRepository
+    /// Retained recordings live on disk (P17), not in SwiftData — export includes them
+    /// so "Export All Data" truly exports everything the privacy policy promises.
+    var audioStore = AudioStore()
 
     func exportAll() async throws -> [URL] {
         let directory = FileManager.default.temporaryDirectory
@@ -54,9 +57,19 @@ nonisolated struct DefaultDataExportService: DataExportService {
                let summary = try? JSONDecoder().decode(MeetingSummary.self, from: Data(json.utf8)) {
                 markdown += "\n## Summary\n\n" + Self.summaryMarkdown(summary)
             }
-            let url = directory.appendingPathComponent(SessionExporter.sanitizedFileName(session.title, ext: "md"))
+            let baseName = SessionExporter.sanitizedFileName(session.title, ext: "md")
+            let url = directory.appendingPathComponent(baseName)
             try markdown.data(using: .utf8)?.write(to: url)
             urls.append(url)
+
+            // Pair the retained recording with its transcript, sharing the base name.
+            if audioStore.exists(session.id) {
+                let audioName = SessionExporter.sanitizedFileName(session.title, ext: "m4a")
+                let audioURL = directory.appendingPathComponent(audioName)
+                if (try? FileManager.default.copyItem(at: audioStore.url(for: session.id), to: audioURL)) != nil {
+                    urls.append(audioURL)
+                }
+            }
         }
 
         let docs = try await documents.fetchAll()

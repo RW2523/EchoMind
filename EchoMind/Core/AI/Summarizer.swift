@@ -150,7 +150,8 @@ nonisolated struct MapReduceSummarizer: SummarizerService {
     private func reduce(text: String) async throws -> MeetingSummary {
         do {
             return try await gateway.generate(instructions: SummaryPrompts.reduce, prompt: text,
-                                              as: MeetingSummary.self)
+                                              as: MeetingSummary.self,
+                                              maxOutputTokens: SummaryPrompts.reduceOutputTokens)
         } catch ModelGatewayError.exceededContextWindow {
             throw SummarizerError.tooLong
         }
@@ -165,14 +166,16 @@ nonisolated struct MapReduceSummarizer: SummarizerService {
         let combined = partials.joined(separator: "\n\n")
         do {
             return try await gateway.generate(instructions: SummaryPrompts.reduce, prompt: combined,
-                                              as: MeetingSummary.self)
+                                              as: MeetingSummary.self,
+                                              maxOutputTokens: SummaryPrompts.reduceOutputTokens)
         } catch ModelGatewayError.exceededContextWindow {
             guard partials.count > 1 else { throw SummarizerError.tooLong }
             let merged = try await mergeGroups(partials, groupSize: max(1, partials.count / 2))
             do {
                 return try await gateway.generate(instructions: SummaryPrompts.reduce,
                                                   prompt: merged.joined(separator: "\n\n"),
-                                                  as: MeetingSummary.self)
+                                                  as: MeetingSummary.self,
+                                                  maxOutputTokens: SummaryPrompts.reduceOutputTokens)
             } catch ModelGatewayError.exceededContextWindow {
                 throw SummarizerError.tooLong
             }

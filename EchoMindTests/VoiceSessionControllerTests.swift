@@ -26,6 +26,38 @@ private final class MockVoiceInput: VoiceInput {
     func stop() async -> String { stopCount += 1; return finalTranscript }
 }
 
+/// Yields a different scripted partial stream on each `start()`, so a test can drive
+/// the listening turn and the hands-free barge monitor independently.
+@MainActor
+private final class ScriptedVoiceInput: VoiceInput {
+    let scripts: [(partials: [String], final: String)]
+    private(set) var startCount = 0
+
+    init(_ scripts: [(partials: [String], final: String)]) { self.scripts = scripts }
+
+    func start() async throws -> AsyncStream<String> {
+        let idx = startCount
+        startCount += 1
+        let script = idx < scripts.count ? scripts[idx] : (partials: [], final: "")
+        return AsyncStream { continuation in
+            for partial in script.partials { continuation.yield(partial) }
+            continuation.finish()
+        }
+    }
+
+    func stop() async -> String {
+        let idx = max(0, startCount - 1)
+        return idx < scripts.count ? scripts[idx].final : ""
+    }
+}
+
+/// Monotonic clock: each read advances 1s, so the endpointer's quiescence window
+/// elapses on the next poll without waiting real time.
+private final class AdvancingClock: @unchecked Sendable {
+    private var t: TimeInterval = 0
+    func next() -> TimeInterval { t += 1; return t }
+}
+
 @MainActor
 private final class MockSynthesizer: SpeechSynthesizing {
     let available: Bool
@@ -161,6 +193,38 @@ private final class QuestionSink {
         await task.value
         #expect(synth.stopped)
         #expect(controller.state == .idle)
+    }
+
+    @Test func handsFreeSpokenBargeInStopsAgentAndReopensTurn() async {
+        // Turn 1 = listening ("what is the plan"); turn 2 = the barge monitor, which
+        // hears the user start talking again ("wait stop now") while the agent answers;
+        // later turns are quiet so the reopened listen turn just waits.
+        let input = ScriptedVoiceInput([
+            (["what is the plan"], "what is the plan"),
+            (["wait stop now"], "wait stop now"),
+            ([], ""), ([], ""),
+        ])
+        let synth = MockSynthesizer(blockUntilStopped: true)
+        let sink = QuestionSink(answer: "here is the whole plan spoken slowly")
+        let clock = AdvancingClock()
+        let controller = VoiceSessionController(
+            input: input, synthesizer: synth, onQuestion: sink.handle,
+            now: { clock.next() })
+
+        await controller.startConversation()
+
+        // Wait for the monitor to fire a barge-in: the agent is stopped and a fresh
+        // listen turn is opened (a 3rd capture session). Bounded so it can't hang.
+        var reopened = false
+        for _ in 0..<400 {
+            if synth.stopped && input.startCount >= 3 { reopened = true; break }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+
+        #expect(reopened)
+        #expect(synth.stopped)                 // TTS/generation cut off by the interruption
+        #expect(controller.state == .listening)  // hands-free reopened a turn
+        controller.cancel()
     }
 
     @Test func cancelDuringSpeakingStopsAndIdles() async {

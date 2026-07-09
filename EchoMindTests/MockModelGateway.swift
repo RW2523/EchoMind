@@ -30,7 +30,7 @@ actor MockModelGateway: ModelGateway {
         return respondReturn
     }
 
-    func generate<T: Generable & Sendable>(instructions: String, prompt: String, as type: T.Type) async throws -> T {
+    func generate<T: Generable & Sendable>(instructions: String, prompt: String, as type: T.Type, maxOutputTokens: Int) async throws -> T {
         generateCalls += 1
         if overflowGenerate > 0 { overflowGenerate -= 1; throw ModelGatewayError.exceededContextWindow }
         if let answer = ragAnswerReturn as? T { return answer }
