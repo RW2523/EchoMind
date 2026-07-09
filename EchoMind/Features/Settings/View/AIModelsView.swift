@@ -30,79 +30,23 @@ struct AIModelsView: View {
     private func content(_ model: AIModelsViewModel) -> some View {
         @Bindable var model = model
         return List {
-            Section {
-                Picker("When available", selection: $model.preference) {
-                    Text("Automatic").tag(AIPreference.auto)
-                    Text("Prefer on-device model").tag(AIPreference.preferLocal)
-                    Text("Apple Intelligence only").tag(AIPreference.appleOnly)
-                    Text("On-device model only").tag(AIPreference.localOnly)
-                }
-            } header: {
-                Text("AI Engine")
-            } footer: {
-                Text("Automatic uses Apple Intelligence when your device supports it, and falls back to a downloaded on-device model otherwise. Everything runs locally either way.")
-            }
-
-            if !model.engineLinked {
+            if model.engineLinked {
+                downloadableModelSections(model)
+            } else {
+                // 1.0: only Apple Intelligence is available — present it cleanly,
+                // without any "engine not installed" warnings or download rows.
                 Section {
                     Label {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("Inference engine not installed").font(.subheadline.weight(.semibold))
-                            Text("Add the MLX Swift package in Xcode to enable downloading and running on-device models. Steps are in PACKAGES.md.")
+                            Text("Powered by Apple Intelligence").font(.subheadline.weight(.semibold))
+                            Text("Transcription, summaries, grouping, memory, and answers all run on Apple's on-device models — nothing leaves this iPhone.")
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                     } icon: {
-                        Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                        Image(systemName: "sparkles").foregroundStyle(DS.brand)
                     }
-                }
-            }
-
-            if dependencies.embeddingIndexStale {
-                Section {
-                    Button {
-                        Task {
-                            rebuilding = true
-                            try? await dependencies.indexer.rebuildAll()
-                            dependencies.markIndexRebuilt()
-                            rebuilding = false
-                        }
-                    } label: {
-                        HStack {
-                            Label("Rebuild search index", systemImage: "arrow.triangle.2.circlepath")
-                            if rebuilding { Spacer(); ProgressView() }
-                        }
-                    }
-                    .disabled(rebuilding)
                 } footer: {
-                    Text("Your embedding model changed. Rebuild the index so search uses the new one.")
-                }
-            }
-
-            Section("Chat models") {
-                ForEach(model.chatModels) { item in
-                    modelRow(item, model: model)
-                }
-            }
-
-            Section {
-                embeddingRow(builtInSelected: model.selectedEmbeddingModelID == nil, model: model)
-                ForEach(model.embeddingModels) { item in
-                    modelRow(item, model: model)
-                }
-            } header: {
-                Text("Search embedding")
-            } footer: {
-                Text("The model that turns your notes into searchable vectors. Built-in works everywhere with no download; EmbeddingGemma is more accurate. Switching takes effect after you restart and rebuild the index.")
-            }
-
-            if !model.voiceModels.isEmpty {
-                Section {
-                    voiceRow(builtInSelected: model.selectedVoiceModelID == nil, model: model)
-                    ForEach(model.voiceModels) { item in modelRow(item, model: model) }
-                } header: {
-                    Text("Voice")
-                } footer: {
-                    Text("The spoken voice for the voice assistant. Built-in (system) works everywhere; Kokoro is warmer and more natural.")
+                    Text("Downloadable on-device language and voice models are coming in a future update.")
                 }
             }
         }
@@ -113,6 +57,70 @@ struct AIModelsView: View {
             Button("Download") { model.confirmConsent() }
         } message: {
             Text("Model weights are fetched once from Hugging Face over the network. After that, everything runs fully on-device — nothing you record or ask ever leaves your iPhone.")
+        }
+    }
+
+    /// Picker + downloadable chat/embedding/voice models — shown only when an
+    /// on-device inference engine is linked (1.1+). 1.0 ships without these.
+    @ViewBuilder
+    private func downloadableModelSections(_ model: AIModelsViewModel) -> some View {
+        @Bindable var model = model
+        Section {
+            Picker("When available", selection: $model.preference) {
+                Text("Automatic").tag(AIPreference.auto)
+                Text("Prefer on-device model").tag(AIPreference.preferLocal)
+                Text("Apple Intelligence only").tag(AIPreference.appleOnly)
+                Text("On-device model only").tag(AIPreference.localOnly)
+            }
+        } header: {
+            Text("AI Engine")
+        } footer: {
+            Text("Automatic uses Apple Intelligence when your device supports it, and falls back to a downloaded on-device model otherwise. Everything runs locally either way.")
+        }
+
+        if dependencies.embeddingIndexStale {
+            Section {
+                Button {
+                    Task {
+                        rebuilding = true
+                        try? await dependencies.indexer.rebuildAll()
+                        dependencies.markIndexRebuilt()
+                        rebuilding = false
+                    }
+                } label: {
+                    HStack {
+                        Label("Rebuild search index", systemImage: "arrow.triangle.2.circlepath")
+                        if rebuilding { Spacer(); ProgressView() }
+                    }
+                }
+                .disabled(rebuilding)
+            } footer: {
+                Text("Your embedding model changed. Rebuild the index so search uses the new one.")
+            }
+        }
+
+        Section("Chat models") {
+            ForEach(model.chatModels) { item in modelRow(item, model: model) }
+        }
+
+        Section {
+            embeddingRow(builtInSelected: model.selectedEmbeddingModelID == nil, model: model)
+            ForEach(model.embeddingModels) { item in modelRow(item, model: model) }
+        } header: {
+            Text("Search embedding")
+        } footer: {
+            Text("The model that turns your notes into searchable vectors. Built-in works everywhere with no download; EmbeddingGemma is more accurate. Switching takes effect after you restart and rebuild the index.")
+        }
+
+        if !model.voiceModels.isEmpty {
+            Section {
+                voiceRow(builtInSelected: model.selectedVoiceModelID == nil, model: model)
+                ForEach(model.voiceModels) { item in modelRow(item, model: model) }
+            } header: {
+                Text("Voice")
+            } footer: {
+                Text("The spoken voice for the voice assistant. Built-in (system) works everywhere; Kokoro is warmer and more natural.")
+            }
         }
     }
 

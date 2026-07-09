@@ -18,10 +18,14 @@ story perfect: **"Data Not Collected."**
 | Bundle id `com.ajace.EchoMind`, v1.0 (build 1), icon 1024px | ✅ present |
 | 261 tests green; zero-network audit test | ✅ passing |
 | RAG + generation verified live (simulator, tierA) | ✅ verified |
-| **PrivacyInfo.xcprivacy** | ❌ **missing — blocker** (UserDefaults → CA92.1; file timestamps/size → C617.1) |
-| Device validation (mic/speech/voice/reports on real iPhone) | ❌ **not done — biggest risk** |
-| App Store Connect record, signing, screenshots, metadata | ❌ not started |
-| Package-gated UI (Model Manager rows) visible without engines | ⚠️ hide for 1.0 (reviewer confusion) |
+| **PrivacyInfo.xcprivacy** | ✅ **DONE** — UserDefaults CA92.1 + DiskSpace E174.1; verified bundled in Release .app |
+| Export compliance key (`ITSAppUsesNonExemptEncryption=NO`) | ✅ **DONE** — in Info.plist, verified in built plist |
+| 1.0 feature gating (hide download UI w/o engines) | ✅ **DONE** — AI Models shows clean "Powered by Apple Intelligence" |
+| About screen + privacy links | ✅ **DONE** |
+| Store metadata + privacy-policy draft | ✅ **DONE** — AppStore/METADATA.md, AppStore/PRIVACY_POLICY.md |
+| Release build + 261 tests | ✅ **DONE** — Release compiles, suite green |
+| Device validation (mic/speech/voice/reports on real iPhone) | ❌ **not done — biggest risk (Workstream B)** |
+| App Store Connect record, signing, screenshots | ❌ Workstream C/D — needs your account + device |
 
 ## 1. Workstreams
 

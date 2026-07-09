@@ -119,6 +119,14 @@ struct SettingsView: View {
                 }
             }
 
+            Section {
+                NavigationLink {
+                    AboutView()
+                } label: {
+                    Label("About EchoMind", systemImage: "info.circle")
+                }
+            }
+
             Section("Recording") {
                 Text(AppCopy.recordingConsent)
                     .font(.footnote)
