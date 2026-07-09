@@ -141,9 +141,13 @@ final class AppDependencies {
         self.modelGateway = routing
         let summarizer = MapReduceSummarizer(gateway: routing, budgeter: budgeter)
         self.summarizer = summarizer
+        let grouping = SessionGroupingService(
+            sessions: sessionRepo, chunks: chunkRepo, embedder: embedder,
+            classifier: MeetingClassifier(gateway: routing))
         self.reportGenerator = ReportPipeline(
             sessions: sessionRepo, summarizer: summarizer,
-            availability: { await MainActor.run { monitor.status } })
+            availability: { await MainActor.run { monitor.status } },
+            grouping: grouping)
         self.ragService = RAGPipeline(
             chunks: chunkRepo, embedder: embedder, search: VectorSearch(),
             gateway: routing, budgeter: budgeter,

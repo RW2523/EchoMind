@@ -12,6 +12,9 @@ nonisolated struct ReportPipeline: ReportGenerating {
     let sessions: any SessionRepository
     let summarizer: any SummarizerService
     let availability: @Sendable () async -> AvailabilityStatus
+    /// R2: after a report lands, (re)group meetings by concept. Optional so the
+    /// pipeline is usable/testable without grouping.
+    var grouping: (any SessionGrouping)?
 
     func generateReport(sessionId: UUID) async {
         // Tier B: no generator — record it and leave the manual path for later.
@@ -35,6 +38,7 @@ nonisolated struct ReportPipeline: ReportGenerating {
             let summary = try await summarizer.summarize(segments: texts) { _ in }
             let json = String(decoding: try JSONEncoder().encode(summary), as: UTF8.self)
             try await sessions.setReport(summaryJSON: json, sessionId: sessionId)
+            await grouping?.organize()   // R2: group this session with similar ones
         } catch {
             try? await sessions.setReportState(.failed, sessionId: sessionId)
         }

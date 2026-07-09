@@ -31,4 +31,7 @@ nonisolated protocol SessionRepository: Sendable {
     func setReportState(_ state: ReportState, sessionId: UUID) async throws
     func setReport(summaryJSON: String, sessionId: UUID) async throws
     func setActionStates(_ statesJSON: String, sessionId: UUID) async throws
+
+    // R2: AI grouping — category + topic tags (slot 0 = category).
+    func setTags(_ tags: [String], sessionId: UUID) async throws
 }

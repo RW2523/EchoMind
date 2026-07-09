@@ -120,6 +120,12 @@ actor SwiftDataSessionRepository: SessionRepository {
         try modelContext.save()
     }
 
+    func setTags(_ tags: [String], sessionId: UUID) async throws {
+        guard let session = try sessionModel(id: sessionId) else { throw StorageError.sessionNotFound }
+        session.tags = tags
+        try modelContext.save()
+    }
+
     // MARK: - Helpers
 
     private func sessionModel(id: UUID) throws -> Session? {
