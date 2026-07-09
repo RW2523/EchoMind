@@ -16,12 +16,21 @@ struct SessionsView: View {
                         } label: {
                             SessionRow(session: session, repository: dependencies.sessionRepository)
                         }
+                        .listRowBackground(
+                            RoundedRectangle(cornerRadius: DS.rMd, style: .continuous)
+                                .fill(.regularMaterial)
+                                .shadow(color: .black.opacity(0.07), radius: 8, y: 4)
+                                .padding(.vertical, 4))
+                        .listRowSeparator(.hidden)
                     }
                     .onDelete { offsets in
                         let ids = offsets.map { model.sessions[$0].id }
                         Task { await model.delete(ids: ids) }
                     }
                 }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .background(BrandBackground())
                 .overlay {
                     if model.sessions.isEmpty {
                         ContentUnavailableView("No Sessions Yet", systemImage: "waveform",

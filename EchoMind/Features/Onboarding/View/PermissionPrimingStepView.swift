@@ -6,7 +6,7 @@ import SwiftUI
 struct PermissionPrimingStepView: View {
     var body: some View {
         VStack(spacing: 20) {
-            BrandIconBadge(systemName: "mic.badge.plus")
+            BrandIconBadge(systemName: "mic.badge.plus", pulse: true)
             Text("A couple of permissions")
                 .font(.title.bold())
                 .multilineTextAlignment(.center)

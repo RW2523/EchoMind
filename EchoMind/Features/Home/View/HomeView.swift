@@ -1,25 +1,32 @@
 import SwiftUI
 
-/// Home dashboard (V2 §D): a gradient hero action, quick actions, and recent
-/// sessions as cards on the brand backdrop.
+/// Home dashboard: an animated hero, quick actions, and recent sessions as
+/// frosted cards over the living aurora backdrop.
 struct HomeView: View {
     @Environment(AppDependencies.self) private var dependencies
     @State private var model: HomeViewModel?
+    @State private var appeared = false
 
     var body: some View {
         ScrollView {
-            VStack(spacing: DS.lg) {
-                primaryAction
+            VStack(alignment: .leading, spacing: DS.xl) {
+                header.revealOnAppear(delay: 0.02)
+                primaryAction.revealOnAppear(delay: 0.08)
                 HStack(spacing: DS.md) {
-                    quickAction(title: "Ask", subtitle: "Your knowledge", icon: "sparkles") { AskView() }
-                    quickAction(title: "Import", subtitle: "Docs & PDFs", icon: "doc.badge.plus") { KnowledgeView() }
+                    quickAction(title: "Ask", subtitle: "Your knowledge",
+                                icon: "sparkles") { AskView() }
+                    quickAction(title: "Import", subtitle: "Docs & PDFs",
+                                icon: "doc.badge.plus") { KnowledgeView() }
                 }
-                recentSection
+                .revealOnAppear(delay: 0.14)
+                recentSection.revealOnAppear(delay: 0.2)
             }
             .padding(DS.lg)
+            .padding(.top, DS.sm)
         }
         .background(BrandBackground())
-        .navigationTitle("EchoMind")
+        .navigationTitle("")
+        .toolbar(.hidden, for: .navigationBar)
         .task {
             if model == nil {
                 let vm = HomeViewModel(repository: dependencies.sessionRepository)
@@ -31,50 +38,75 @@ struct HomeView: View {
         }
     }
 
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("Welcome to")
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.secondary)
+            Text("EchoMind")
+                .font(.system(size: 40, weight: .bold, design: .rounded))
+                .vividForeground()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
     private var primaryAction: some View {
         NavigationLink {
             LiveTranscriptView()
         } label: {
             HStack(spacing: DS.lg) {
-                Image(systemName: "mic.fill")
-                    .font(.system(size: 26, weight: .semibold))
-                    .foregroundStyle(DS.brand)
-                    .frame(width: 56, height: 56)
-                    .background(.white.opacity(0.9), in: Circle())
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Start Live Transcript").font(.title3.weight(.semibold)).foregroundStyle(.white)
-                    Text("Record & transcribe on-device").font(.subheadline).foregroundStyle(.white.opacity(0.85))
+                ZStack {
+                    AnimatedRing(lineWidth: 3).frame(width: 60, height: 60)
+                    Image(systemName: "mic.fill")
+                        .font(.system(size: 24, weight: .semibold))
+                        .foregroundStyle(DS.brand)
+                        .frame(width: 48, height: 48)
+                        .background(.white, in: Circle())
+                }
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Start Live Transcript")
+                        .font(.title3.weight(.bold)).foregroundStyle(.white)
+                    Text("Record & transcribe on-device")
+                        .font(.subheadline).foregroundStyle(.white.opacity(0.9))
                 }
                 Spacer()
-                Image(systemName: "chevron.right").foregroundStyle(.white.opacity(0.7))
+                Image(systemName: "chevron.right").font(.headline).foregroundStyle(.white.opacity(0.8))
             }
             .padding(DS.lg)
             .frame(maxWidth: .infinity)
-            .background(DS.brandGradient, in: RoundedRectangle(cornerRadius: DS.rLg, style: .continuous))
-            .shadow(color: DS.brand.opacity(0.35), radius: 16, y: 8)
+            .background(DS.vividGradient, in: RoundedRectangle(cornerRadius: DS.rLg, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.rLg, style: .continuous)
+                    .strokeBorder(.white.opacity(0.18), lineWidth: 1))
+            .glow(DS.brand, radius: 14)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressableStyle())
     }
 
     private func quickAction<Destination: View>(title: String, subtitle: String, icon: String,
                                                 @ViewBuilder destination: @escaping () -> Destination) -> some View {
         NavigationLink(destination: destination) {
             GlassCard(padding: DS.lg) {
-                VStack(alignment: .leading, spacing: DS.sm) {
-                    Image(systemName: icon).font(.title2).foregroundStyle(DS.brand)
+                VStack(alignment: .leading, spacing: DS.md) {
+                    Image(systemName: icon)
+                        .font(.title2.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 44, height: 44)
+                        .background(DS.brandGradient, in: RoundedRectangle(cornerRadius: DS.rSm, style: .continuous))
+                        .glow(DS.brand, radius: 6)
                     Text(title).font(.headline)
                     Text(subtitle).font(.caption).foregroundStyle(.secondary)
                 }
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressableStyle())
     }
 
     @ViewBuilder private var recentSection: some View {
         if let model, !model.recent.isEmpty {
             VStack(alignment: .leading, spacing: DS.md) {
-                Text("Recent").font(.headline).padding(.leading, DS.xs)
-                ForEach(model.recent) { session in
+                Text("Recent").font(.title3.weight(.bold)).padding(.leading, DS.xs)
+                ForEach(Array(model.recent.enumerated()), id: \.element.id) { index, session in
                     NavigationLink {
                         SessionDetailView(session: session)
                     } label: {
@@ -82,14 +114,20 @@ struct HomeView: View {
                             SessionRow(session: session, repository: dependencies.sessionRepository)
                         }
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(PressableStyle())
+                    .revealOnAppear(delay: 0.22 + Double(index) * 0.05)
                 }
             }
         } else {
             GlassCard {
                 HStack(spacing: DS.md) {
-                    Image(systemName: "waveform").font(.title2).foregroundStyle(.secondary)
-                    Text("Your sessions will appear here.").foregroundStyle(.secondary)
+                    Image(systemName: "waveform")
+                        .font(.title2).foregroundStyle(DS.brand)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("No sessions yet").font(.headline)
+                        Text("Tap Start Live Transcript to begin.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
                     Spacer()
                 }
             }
