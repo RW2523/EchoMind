@@ -106,6 +106,8 @@ struct AIModelsView: View {
                 }
             }
         }
+        .scrollContentBackground(.hidden)
+        .background(BrandBackground())
         .alert("Download this model?", isPresented: $model.showConsent) {
             Button("Cancel", role: .cancel) { model.cancelConsent() }
             Button("Download") { model.confirmConsent() }

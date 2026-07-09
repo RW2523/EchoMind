@@ -29,6 +29,12 @@ struct KnowledgeView: View {
                         } label: {
                             KnowledgeSourceRow(source: source)
                         }
+                        .listRowBackground(
+                            RoundedRectangle(cornerRadius: DS.rMd, style: .continuous)
+                                .fill(.regularMaterial)
+                                .shadow(color: .black.opacity(0.07), radius: 8, y: 4)
+                                .padding(.vertical, 4))
+                        .listRowSeparator(.hidden)
                         .swipeActions {
                             Button(role: .destructive) {
                                 Task { await model.delete(source) }
@@ -36,6 +42,9 @@ struct KnowledgeView: View {
                         }
                     }
                 }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .background(BrandBackground())
                 .overlay {
                     if model.sources.isEmpty && !model.isImporting {
                         ContentUnavailableView("No Knowledge Yet", systemImage: "books.vertical",

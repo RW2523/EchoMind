@@ -124,6 +124,8 @@ struct SettingsView: View {
             DebugStorageSection()
             #endif
         }
+        .scrollContentBackground(.hidden)
+        .background(BrandBackground())
         .sheet(isPresented: Binding(get: { model.showShare }, set: { model.showShare = $0 })) {
             ShareSheet(items: model.exportURLs)
         }
