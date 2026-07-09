@@ -126,6 +126,12 @@ actor SwiftDataSessionRepository: SessionRepository {
         try modelContext.save()
     }
 
+    func setContinuity(_ notesJSON: String, sessionId: UUID) async throws {
+        guard let session = try sessionModel(id: sessionId) else { throw StorageError.sessionNotFound }
+        session.continuityJSON = notesJSON
+        try modelContext.save()
+    }
+
     // MARK: - Helpers
 
     private func sessionModel(id: UUID) throws -> Session? {

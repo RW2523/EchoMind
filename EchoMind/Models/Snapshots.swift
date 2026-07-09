@@ -16,10 +16,12 @@ nonisolated struct SessionSnapshot: Sendable, Hashable, Identifiable {
     var tags: [String]
     var reportState: ReportState
     var actionStatesJSON: String?
+    var continuityJSON: String?
 
     init(id: UUID = UUID(), title: String, createdAt: Date = Date(), updatedAt: Date = Date(),
          duration: TimeInterval = 0, summaryJSON: String? = nil, origin: SessionOrigin = .live,
-         tags: [String] = [], reportState: ReportState = .none, actionStatesJSON: String? = nil) {
+         tags: [String] = [], reportState: ReportState = .none, actionStatesJSON: String? = nil,
+         continuityJSON: String? = nil) {
         self.id = id
         self.title = title
         self.createdAt = createdAt
@@ -30,13 +32,23 @@ nonisolated struct SessionSnapshot: Sendable, Hashable, Identifiable {
         self.tags = tags
         self.reportState = reportState
         self.actionStatesJSON = actionStatesJSON
+        self.continuityJSON = continuityJSON
     }
 
     /// Action-item completion flags decoded from `actionStatesJSON`.
     var actionStates: [Bool] {
-        guard let json = actionStatesJSON, let data = json.data(using: .utf8),
-              let states = try? JSONDecoder().decode([Bool].self, from: data) else { return [] }
-        return states
+        Self.decodeJSONArray(actionStatesJSON)
+    }
+
+    /// Continuity notes referencing prior related meetings.
+    var continuityNotes: [String] {
+        Self.decodeJSONArray(continuityJSON)
+    }
+
+    private static func decodeJSONArray<T: Decodable>(_ json: String?) -> [T] {
+        guard let json, let data = json.data(using: .utf8),
+              let values = try? JSONDecoder().decode([T].self, from: data) else { return [] }
+        return values
     }
 }
 

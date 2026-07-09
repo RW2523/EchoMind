@@ -34,4 +34,7 @@ nonisolated protocol SessionRepository: Sendable {
 
     // R2: AI grouping — category + topic tags (slot 0 = category).
     func setTags(_ tags: [String], sessionId: UUID) async throws
+
+    // R3+: continuity notes referencing prior related meetings.
+    func setContinuity(_ notesJSON: String, sessionId: UUID) async throws
 }

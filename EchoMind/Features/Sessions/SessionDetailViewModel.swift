@@ -71,6 +71,9 @@ final class SessionDetailViewModel {
 
     private var isManuallyGenerating = false
 
+    /// R3+: notes linking this report to prior related meetings.
+    var continuityNotes: [String] { session.continuityNotes }
+
     func load() async {
         if let fresh = try? await repository.fetchSession(id: session.id) { session = fresh }
         segments = (try? await repository.fetchSegments(sessionId: session.id)) ?? []

@@ -33,6 +33,19 @@ struct SummarySectionView: View {
     // MARK: - Structured summary
 
     @ViewBuilder private func content(_ summary: MeetingSummary) -> some View {
+        if !model.continuityNotes.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                Label("Continuing from earlier meetings", systemImage: "arrow.triangle.branch")
+                    .font(.subheadline.bold())
+                    .foregroundStyle(DS.brand)
+                ForEach(model.continuityNotes, id: \.self) { note in
+                    HStack(alignment: .top, spacing: 6) { Text("•"); Text(note) }
+                }
+            }
+            .padding(DS.md)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(DS.brand.opacity(0.08), in: RoundedRectangle(cornerRadius: DS.rSm, style: .continuous))
+        }
         if !summary.overview.isEmpty {
             Text(summary.overview)
         }
