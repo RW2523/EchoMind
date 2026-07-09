@@ -21,6 +21,8 @@ final class Session {
     var reportStateRaw: String = ReportState.none.rawValue
     /// R1: JSON `[Bool]` of action-item completion, indexed by position. nil = none checked.
     var actionStatesJSON: String?
+    /// R3+: JSON `[String]` of continuity notes referencing prior related meetings.
+    var continuityJSON: String?
 
     @Relationship(deleteRule: .cascade, inverse: \TranscriptSegment.session)
     var segments: [TranscriptSegment] = []
@@ -52,6 +54,7 @@ final class Session {
     var snapshot: SessionSnapshot {
         SessionSnapshot(id: id, title: title, createdAt: createdAt, updatedAt: updatedAt,
                         duration: duration, summaryJSON: summaryJSON, origin: origin, tags: tags,
-                        reportState: reportState, actionStatesJSON: actionStatesJSON)
+                        reportState: reportState, actionStatesJSON: actionStatesJSON,
+                        continuityJSON: continuityJSON)
     }
 }

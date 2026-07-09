@@ -17,6 +17,8 @@ nonisolated struct ReportPipeline: ReportGenerating {
     var grouping: (any SessionGrouping)?
     /// R3: distill the report into long-term memory. Optional.
     var distiller: (any MemoryDistilling)?
+    /// R3+: continuity notes referencing prior related meetings. Optional.
+    var continuity: (any ContinuityProviding)?
 
     func generateReport(sessionId: UUID) async {
         // Tier B: no generator — record it and leave the manual path for later.
@@ -40,6 +42,14 @@ nonisolated struct ReportPipeline: ReportGenerating {
             let summary = try await summarizer.summarize(segments: texts) { _ in }
             let json = String(decoding: try JSONEncoder().encode(summary), as: UTF8.self)
             try await sessions.setReport(summaryJSON: json, sessionId: sessionId)
+            // R3+: link this report to prior related meetings.
+            if let continuity {
+                let notes = await continuity.continuityNotes(for: sessionId, overview: summary.overview)
+                if !notes.isEmpty,
+                   let notesJSON = try? String(decoding: JSONEncoder().encode(notes), as: UTF8.self) {
+                    try? await sessions.setContinuity(notesJSON, sessionId: sessionId)
+                }
+            }
             await grouping?.organize()                                    // R2: group with similar
             await distiller?.distill(reportOverview: summary.overview, sessionId: sessionId)  // R3: remember
         } catch {

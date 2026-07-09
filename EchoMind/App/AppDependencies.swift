@@ -148,10 +148,12 @@ final class AppDependencies {
             sessions: sessionRepo, chunks: chunkRepo, embedder: embedder,
             classifier: MeetingClassifier(gateway: routing))
         let distiller = MemoryDistiller(gateway: routing, store: memoryStore)
+        let continuity = MeetingContinuityService(
+            sessions: sessionRepo, chunks: chunkRepo, embedder: embedder, gateway: routing)
         self.reportGenerator = ReportPipeline(
             sessions: sessionRepo, summarizer: summarizer,
             availability: { await MainActor.run { monitor.status } },
-            grouping: grouping, distiller: distiller)
+            grouping: grouping, distiller: distiller, continuity: continuity)
         self.ragService = RAGPipeline(
             chunks: chunkRepo, embedder: embedder, search: VectorSearch(),
             gateway: routing, budgeter: budgeter,
