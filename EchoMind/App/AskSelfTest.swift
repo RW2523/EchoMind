@@ -42,12 +42,12 @@ enum AskSelfTest {
 
     private static func ask(_ dependencies: AppDependencies, _ question: String) async {
         do {
-            let result = try await dependencies.ragService.ask(question)
+            let result = try await dependencies.ragService.ask(question, history: [])
             switch result {
-            case .conversational(let answer):
-                print("[SelfTest] Q:\"\(question)\" -> CONVERSATIONAL: \(answer)")
-            case .grounded(let answer, let sources):
-                print("[SelfTest] Q:\"\(question)\" -> GROUNDED (\(sources.count) src): \(answer)")
+            case .conversational(let answer, let followUps):
+                print("[SelfTest] Q:\"\(question)\" -> CONVERSATIONAL: \(answer) · followUps=\(followUps)")
+            case .grounded(let answer, let sources, let followUps):
+                print("[SelfTest] Q:\"\(question)\" -> GROUNDED (\(sources.count) src): \(answer) · followUps=\(followUps)")
             case .retrievalOnly(let passages, let reason):
                 print("[SelfTest] Q:\"\(question)\" -> RETRIEVAL-ONLY (\(passages.count) passages, \(reason))")
             }

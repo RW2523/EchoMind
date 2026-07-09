@@ -3,9 +3,7 @@ import SwiftUI
 struct WelcomeStepView: View {
     var body: some View {
         VStack(spacing: 20) {
-            Image(systemName: "waveform.circle.fill")
-                .font(.system(size: 72))
-                .foregroundStyle(.tint)
+            BrandIconBadge(systemName: "waveform")
             Text("Welcome to EchoMind")
                 .font(.largeTitle.bold())
                 .multilineTextAlignment(.center)

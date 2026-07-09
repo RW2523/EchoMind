@@ -11,6 +11,7 @@ final class SettingsViewModel {
     var showShare = false
     var locales: [Locale] = []
     var preferredLocaleIdentifier: String
+    var audioRetentionEnabled: Bool
 
     let availability: any AvailabilityProviding
 
@@ -33,6 +34,12 @@ final class SettingsViewModel {
         self.indexer = indexer
         self.settingsStore = settingsStore
         self.preferredLocaleIdentifier = settingsStore.preferredLocale ?? Locale.current.identifier(.bcp47)
+        self.audioRetentionEnabled = settingsStore.audioRetentionEnabled
+    }
+
+    func setAudioRetention(_ enabled: Bool) {
+        audioRetentionEnabled = enabled
+        settingsStore.setAudioRetentionEnabled(enabled)
     }
 
     func load() async {

@@ -7,6 +7,12 @@ protocol AudioCapturing: Actor {
     nonisolated var events: AsyncStream<AudioEngineEvent> { get }
     func start() async throws -> AsyncThrowingStream<AudioBufferBox, Error>
     func stop() async
+    /// V3: enable hardware echo cancellation before the next `start()` (voice agent).
+    func setVoiceProcessing(_ enabled: Bool)
+}
+
+extension AudioCapturing {
+    func setVoiceProcessing(_ enabled: Bool) {}   // default: no-op (plain capture / mocks)
 }
 
 actor AudioEngineManager: AudioCapturing {
@@ -25,6 +31,12 @@ actor AudioEngineManager: AudioCapturing {
     private var accumulatedActive: TimeInterval = 0
     private var segmentStart: Date?
     private var elapsedTask: Task<Void, Never>?
+    /// V3: hardware echo cancellation for the voice agent (mic doesn't hear TTS as
+    /// user speech — required for barge-in). Off for plain recording.
+    private var voiceProcessingEnabled = false
+
+    /// Toggle echo cancellation before the next `start()`. Best-effort per §voice.
+    func setVoiceProcessing(_ enabled: Bool) { voiceProcessingEnabled = enabled }
 
     init(configurator: any AudioSessionConfiguring = AudioSessionConfigurator()) {
         self.configurator = configurator
@@ -49,6 +61,11 @@ actor AudioEngineManager: AudioCapturing {
 
         let engine = AVAudioEngine()
         self.engine = engine
+        // Enable voice-processing (AEC) on the I/O nodes before the graph starts.
+        if voiceProcessingEnabled {
+            try? engine.inputNode.setVoiceProcessingEnabled(true)
+            try? engine.outputNode.setVoiceProcessingEnabled(true)
+        }
         let (stream, continuation) = AsyncThrowingStream<AudioBufferBox, Error>.makeStream(bufferingPolicy: .unbounded)
         self.bufferContinuation = continuation
 

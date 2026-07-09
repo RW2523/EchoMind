@@ -260,3 +260,31 @@ Rough total: **8–10 focused weeks**, each milestone independently shippable.
    launch-screen key).
 5. Optional but wise: a designed app icon from a designer for P13 (I'll ship a programmatic
    one regardless).
+
+---
+
+## 11. Build progress log
+
+- **V2.0 (P11–13): SHIPPED to branch `v2`.** NLEmbedding-grounded RAG in the
+  simulator, conversational core (BM25+RRF, memory, follow-ups), design system +
+  UI overhaul. 146→ tests green.
+- **V2.1 (P14–15): CODE-COMPLETE, pending package + device.**
+  - P14: `LocalLLMEngine` seam, `GuidedJSON` (reuses `@Generable` schema via
+    `GeneratedContent(json:)`), `LocalLLMGateway`, `FeatureRouter`, `LocalModelCatalog`.
+    `MLXEngine` behind `#if canImport(MLXLLM)`.
+  - P15: `RoutingModelGateway` (wired as the app gateway), `AISettingsStore`,
+    `ModelDownloadService` + `MLXModelDownloader` (`#if canImport`), `ModelStorage`
+    marker truth, `AIModelsView` manager with consent. 159 tests green.
+  - **Blocked on human:** add `ml-explore/mlx-swift-examples` (MLXLLM, MLXLMCommon)
+    in Xcode, then device-download a model and verify local inference with Apple
+    Intelligence off. Reconcile `MLXEngine.swift` if the MLX API drifted. Extend the
+    network-audit test with the downloader-only allowlist once the package is present.
+- **P17 (audio retention + tap-to-play): SHIPPED (device-verify pending).** AAC capture
+  teed off the transcription stream (best-effort, never breaks recording), on-disk
+  AudioStore, on-by-default retention toggle (G3), SessionDetail player + scrubber +
+  tap-a-line-to-seek, storage accounting + wipe/delete coverage. 183 tests green.
+  Unblocks M3 FluidAudio (diarization now has real audio to run on).
+- **P16 (retrieval quality): SHIPPED.** MMR diversity reranking (`MMRReranker`, λ=0.7)
+  wired into `RAGPipeline` hybrid retrieval (fused pool→MMR→top-6; BM25-only exact hits
+  preserved). Measured: diversity win proven deterministically (MMRRerankerTests);
+  handbook recall not regressed on real NLEmbedding vectors (RetrievalEval gate). 165 tests green.

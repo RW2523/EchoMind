@@ -14,21 +14,54 @@ final class SessionDetailViewModel {
     private(set) var session: SessionSnapshot
     private(set) var segments: [SegmentSnapshot] = []
     private(set) var summaryState: SummaryState = .none
+    private(set) var isIdentifyingSpeakers = false
     var draftTitle: String
 
     private let repository: any SessionRepository
     private let summarizer: any SummarizerService
     private let availability: any AvailabilityProviding
+    private let audioStore: AudioStore
+    private let diarizer: any DiarizationService
 
     init(session: SessionSnapshot,
          repository: any SessionRepository,
          summarizer: any SummarizerService,
-         availability: any AvailabilityProviding) {
+         availability: any AvailabilityProviding,
+         audioStore: AudioStore = AudioStore(),
+         diarizer: any DiarizationService = UnavailableDiarizationService()) {
         self.session = session
         self.draftTitle = session.title
         self.repository = repository
         self.summarizer = summarizer
         self.availability = availability
+        self.audioStore = audioStore
+        self.diarizer = diarizer
+    }
+
+    /// Whether "Identify speakers" should be offered: engine linked + audio on disk.
+    var canIdentifySpeakers: Bool {
+        diarizer.isAvailable && audioStore.exists(session.id)
+    }
+
+    /// M3: run diarization on the retained audio and persist speaker labels onto
+    /// each transcript segment (by max temporal overlap), then reload.
+    func identifySpeakers() async {
+        guard canIdentifySpeakers, !isIdentifyingSpeakers else { return }
+        isIdentifyingSpeakers = true
+        defer { isIdentifyingSpeakers = false }
+        do {
+            let result = try await diarizer.diarize(audioURL: audioStore.url(for: session.id))
+            guard !result.isEmpty else { return }
+            let spans = segments.map {
+                SpeakerLabeler.Span(id: $0.id, start: $0.startTime, end: $0.endTime)
+            }
+            let labels = SpeakerLabeler.assign(transcript: spans, diarization: result.segments)
+            guard !labels.isEmpty else { return }
+            try await repository.setSpeakerLabels(labels, sessionId: session.id)
+            await load()
+        } catch {
+            // Best-effort: leave labels as-is on failure.
+        }
     }
 
     func load() async {
@@ -88,6 +121,7 @@ final class SessionDetailViewModel {
 
     func delete() async {
         try? await repository.delete(id: session.id)
+        audioStore.remove(session.id)   // P17: drop the retained recording too
     }
 
     var markdownExport: SessionExport {

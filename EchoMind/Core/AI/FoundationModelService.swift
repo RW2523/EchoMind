@@ -45,3 +45,28 @@ nonisolated struct FoundationModelService: ModelGateway {
         }
     }
 }
+
+extension FoundationModelService: StreamingModelGateway {
+    func stream(instructions: String, prompt: String, maxOutputTokens: Int) -> AsyncThrowingStream<String, Error> {
+        AsyncThrowingStream { continuation in
+            let task = Task {
+                let session = LanguageModelSession(instructions: instructions)
+                do {
+                    let responses = session.streamResponse(
+                        to: prompt,
+                        options: GenerationOptions(maximumResponseTokens: maxOutputTokens))
+                    // Each snapshot's `content` is the cumulative answer text so far.
+                    for try await snapshot in responses {
+                        continuation.yield(snapshot.content)
+                    }
+                    continuation.finish()
+                } catch let error as LanguageModelSession.GenerationError {
+                    continuation.finish(throwing: Self.mapped(error))
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+}

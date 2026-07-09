@@ -11,8 +11,12 @@ nonisolated struct RAGAnswer: Codable, Equatable, Sendable {
     @Guide(description: "True ONLY if you used the provided context passages to answer; false for casual conversation or general knowledge")
     var usedProvidedContext: Bool
 
-    init(answer: String = "", usedProvidedContext: Bool = false) {
+    @Guide(description: "Two or three short, natural follow-up questions the user might ask next", .count(0...3))
+    var followUps: [String]
+
+    init(answer: String = "", usedProvidedContext: Bool = false, followUps: [String] = []) {
         self.answer = answer
         self.usedProvidedContext = usedProvidedContext
+        self.followUps = followUps
     }
 }

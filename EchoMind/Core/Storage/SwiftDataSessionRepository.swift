@@ -92,6 +92,14 @@ actor SwiftDataSessionRepository: SessionRepository {
         try modelContext.save()
     }
 
+    func setSpeakerLabels(_ labels: [UUID: String], sessionId: UUID) async throws {
+        guard let session = try sessionModel(id: sessionId) else { throw StorageError.sessionNotFound }
+        for segment in session.segments {
+            if let label = labels[segment.id] { segment.speakerLabel = label }
+        }
+        try modelContext.save()
+    }
+
     // MARK: - Helpers
 
     private func sessionModel(id: UUID) throws -> Session? {

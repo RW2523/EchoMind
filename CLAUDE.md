@@ -28,7 +28,11 @@ SwiftData, zero third-party dependencies. Full spec and phase plan: PLAN.md
   a 4,096-token context. Always handle exceededContextWindowSize. Budgets: PLAN.md §3.
 - One fresh LanguageModelSession per call; never accumulate history in a session.
 - No force unwraps. No singletons except AppDependencies (composition root).
-- No new packages or network calls without asking me first.
+- No new packages or network calls without asking me first. (V2.1 exception under
+  gate G1: MLX Swift for the on-device LLM — see PACKAGES.md. Package-touching code
+  is isolated behind `#if canImport(MLXLLM)` in Core/AI/Local/MLXEngine.swift so the
+  app still builds without it. Model-weight download is the one allowed network call,
+  consent-gated, downloader-only in the network-audit test.)
 - Never edit the .xcodeproj: new Swift files inside existing folders are picked
   up automatically (synchronized groups).
 - Audio/speech/embedding work runs off the main thread; UI updates on @MainActor.
