@@ -64,8 +64,9 @@ nonisolated enum RAGPrompts {
     from general knowledge. Keep it brief and easy to listen to.
     """
 
-    static func prompt(memory: String, question: String, context: String) -> String {
+    static func prompt(memory: String, question: String, context: String, knownFacts: String = "") -> String {
         var parts: [String] = []
+        if !knownFacts.isEmpty { parts.append("Known about the user (from past meetings):\n\(knownFacts)") }
         if !memory.isEmpty { parts.append("Conversation so far:\n\(memory)") }
         parts.append("Context:\n\(context.isEmpty ? "(no saved knowledge is relevant)" : context)")
         parts.append("Latest message: \(question)")
@@ -83,6 +84,9 @@ nonisolated struct RAGPipeline: RAGService {
     let gateway: any ModelGateway
     let budgeter: TokenBudgeter
     let availability: @Sendable () async -> AvailabilityStatus
+    /// R3: recent long-term memory facts (newest first), injected as a bounded
+    /// preamble so answers carry context from all prior meetings.
+    var knownFacts: (@Sendable () async -> [String])?
 
     static let totalInputBudget = 2_800
     static let chunkBudget = 2_300
@@ -93,6 +97,7 @@ nonisolated struct RAGPipeline: RAGService {
     static let mmrPoolK = 12
     static let mmrLambda: Float = 0.7
     static let memoryTurns = 6
+    static let factsBudget = 300
 
     func ask(_ question: String, history: [ChatTurn]) async throws -> AskResult {
         let trimmed = question.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -112,13 +117,14 @@ nonisolated struct RAGPipeline: RAGService {
         // chats otherwise; always returns follow-ups.
         let retrieved = stored.isEmpty ? [] : try await hybridRetrieve(searchQuery, from: stored)
         let memory = Self.memory(from: history)
+        let facts = await factsBlock()
         let packed = packChunks(retrieved, question: trimmed, memory: memory)
         do {
-            return try await answer(question: trimmed, memory: memory, packed: packed)
+            return try await answer(question: trimmed, memory: memory, facts: facts, packed: packed)
         } catch ModelGatewayError.exceededContextWindow {
             guard packed.count > 1 else { return .retrievalOnly(passages: retrieved, reason: .contextOverflow) }
             do {
-                return try await answer(question: trimmed, memory: memory, packed: Array(packed.dropLast()))
+                return try await answer(question: trimmed, memory: memory, facts: facts, packed: Array(packed.dropLast()))
             } catch {
                 return .retrievalOnly(passages: retrieved, reason: .contextOverflow)
             }
@@ -127,15 +133,21 @@ nonisolated struct RAGPipeline: RAGService {
         }
     }
 
+    /// R3: bounded "known facts" block from long-term memory, or "" when none.
+    private func factsBlock() async -> String {
+        guard let knownFacts else { return "" }
+        return MemoryPreamble.build(from: await knownFacts(), budgeter: budgeter, maxTokens: Self.factsBudget)
+    }
+
     // MARK: - Generation
 
-    private func answer(question: String, memory: String, packed: [RetrievedChunk]) async throws -> AskResult {
+    private func answer(question: String, memory: String, facts: String, packed: [RetrievedChunk]) async throws -> AskResult {
         let context = packed.enumerated()
             .map { "[\($0.offset + 1)] \($0.element.chunk.text)" }
             .joined(separator: "\n\n")
         let result = try await gateway.generate(
             instructions: RAGPrompts.hybrid,
-            prompt: RAGPrompts.prompt(memory: memory, question: question, context: context),
+            prompt: RAGPrompts.prompt(memory: memory, question: question, context: context, knownFacts: facts),
             as: RAGAnswer.self)
         let text = result.answer.trimmingCharacters(in: .whitespacesAndNewlines)
         let followUps = Array(result.followUps.prefix(3))
@@ -260,7 +272,8 @@ extension RAGPipeline: StreamingRAGService {
                     let context = packed.enumerated()
                         .map { "[\($0.offset + 1)] \($0.element.chunk.text)" }
                         .joined(separator: "\n\n")
-                    let prompt = RAGPrompts.prompt(memory: memory, question: trimmed, context: context)
+                    let facts = await factsBlock()
+                    let prompt = RAGPrompts.prompt(memory: memory, question: trimmed, context: context, knownFacts: facts)
 
                     let source = (gateway as? StreamingModelGateway)?
                         .stream(instructions: RAGPrompts.voiceProse, prompt: prompt, maxOutputTokens: Self.outputReserve)

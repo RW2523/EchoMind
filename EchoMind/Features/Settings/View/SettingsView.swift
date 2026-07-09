@@ -54,6 +54,11 @@ struct SettingsView: View {
                 } label: {
                     Label("AI Models", systemImage: "cpu")
                 }
+                NavigationLink {
+                    MemoryView()
+                } label: {
+                    Label("What EchoMind Remembers", systemImage: "brain")
+                }
             }
 
             Section("Transcription Language") {

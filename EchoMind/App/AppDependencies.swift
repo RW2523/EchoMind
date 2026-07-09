@@ -28,6 +28,7 @@ final class AppDependencies {
     var embeddingIndexStale: Bool
     let summarizer: any SummarizerService
     let reportGenerator: any ReportGenerating
+    let memoryStore: any MemoryStore
     let documentImporter: any DocumentImportService
     let embeddingService: any EmbeddingService
     let vectorSearch: VectorSearch
@@ -97,9 +98,11 @@ final class AppDependencies {
                                   chunks: chunkRepo, embedder: embedder)
         let chatRepo = SwiftDataChatRepository(modelContainer: container)
         self.chatRepository = chatRepo
+        let memoryStore = SwiftDataMemoryStore(modelContainer: container)
+        self.memoryStore = memoryStore
         self.storageUsageService = DefaultStorageUsageService(sessions: sessionRepo, documents: docRepository, chunks: chunkRepo)
         self.dataExportService = DefaultDataExportService(sessions: sessionRepo, documents: docRepository)
-        self.dataWipeService = DefaultDataWipeService(sessions: sessionRepo, documents: docRepository, chunks: chunkRepo, chat: chatRepo)
+        self.dataWipeService = DefaultDataWipeService(sessions: sessionRepo, documents: docRepository, chunks: chunkRepo, chat: chatRepo, memory: memoryStore)
         self.permissions = permissions
         self.audioCapturing = AudioEngineManager()
         self.transcriptionService = SpeechAnalyzerTranscriber()
@@ -144,14 +147,16 @@ final class AppDependencies {
         let grouping = SessionGroupingService(
             sessions: sessionRepo, chunks: chunkRepo, embedder: embedder,
             classifier: MeetingClassifier(gateway: routing))
+        let distiller = MemoryDistiller(gateway: routing, store: memoryStore)
         self.reportGenerator = ReportPipeline(
             sessions: sessionRepo, summarizer: summarizer,
             availability: { await MainActor.run { monitor.status } },
-            grouping: grouping)
+            grouping: grouping, distiller: distiller)
         self.ragService = RAGPipeline(
             chunks: chunkRepo, embedder: embedder, search: VectorSearch(),
             gateway: routing, budgeter: budgeter,
-            availability: { await MainActor.run { monitor.status } })
+            availability: { await MainActor.run { monitor.status } },
+            knownFacts: { ((try? await memoryStore.all()) ?? []).prefix(20).map(\.text) })
         let store = AppSettingsStore(container: container)
         self.settingsStore = store
         self.onboardingComplete = store.onboardingComplete

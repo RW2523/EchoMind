@@ -101,6 +101,7 @@ nonisolated struct DefaultDataWipeService: DataWipeService {
     let documents: any DocumentRepository
     let chunks: any ChunkRepository
     let chat: any ChatRepository
+    var memory: (any MemoryStore)?
     var audioStore = AudioStore()
 
     func deleteAllData() async throws {
@@ -108,6 +109,7 @@ nonisolated struct DefaultDataWipeService: DataWipeService {
         for document in try await documents.fetchAll() { try await documents.delete(id: document.id) }
         try await chunks.deleteAll()
         try await chat.deleteAll()
-        audioStore.removeAll()   // P17: retained audio is on disk, not in SwiftData
+        try? await memory?.deleteAll()   // R3: forget everything too
+        audioStore.removeAll()           // P17: retained audio is on disk, not in SwiftData
     }
 }
