@@ -38,21 +38,28 @@ struct AskView: View {
         VStack(spacing: 0) {
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 12) {
+                    LazyVStack(alignment: .leading, spacing: 18) {
                         ForEach(model.messages) { message in
                             if message.role == .user {
                                 Text(message.content)
-                                    .padding(.horizontal, 14).padding(.vertical, 10)
-                                    .background(DS.brandGradient, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                                    .padding(.horizontal, 16).padding(.vertical, 11)
+                                    .background(DS.brandGradient, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
                                     .foregroundStyle(.white)
-                                    .shadow(color: DS.brand.opacity(0.25), radius: 6, y: 3)
+                                    .frame(maxWidth: 300, alignment: .trailing)
                                     .frame(maxWidth: .infinity, alignment: .trailing)
                             } else {
                                 AnswerCardView(message: message)
                             }
                         }
                         if model.state == .thinking {
-                            HStack(spacing: 8) { ProgressView(); Text("Searching your knowledge…").foregroundStyle(.secondary) }
+                            HStack(alignment: .top, spacing: 10) {
+                                Image(systemName: "sparkles").font(.footnote.weight(.semibold))
+                                    .foregroundStyle(DS.brandLight)
+                                    .frame(width: 28, height: 28)
+                                    .background(DS.brand.opacity(0.18), in: Circle())
+                                TypingIndicator()
+                                Spacer(minLength: 0)
+                            }
                         }
                         Color.clear.frame(height: 1).id("bottom")
                     }
@@ -77,8 +84,10 @@ struct AskView: View {
                             } label: {
                                 Text(chip)
                                     .font(.callout).lineLimit(1)
-                                    .padding(.horizontal, 12).padding(.vertical, 7)
-                                    .background(.tint.opacity(0.12), in: Capsule())
+                                    .foregroundStyle(DS.brandLight)
+                                    .padding(.horizontal, 14).padding(.vertical, 8)
+                                    .background(DS.brand.opacity(0.14), in: Capsule())
+                                    .overlay(Capsule().strokeBorder(DS.brand.opacity(0.3), lineWidth: 0.5))
                             }
                             .buttonStyle(.plain)
                         }
@@ -131,38 +140,53 @@ struct AskView: View {
     }
 
     private func inputBar(_ model: AskViewModel) -> some View {
-        HStack(spacing: 8) {
-            TextField("Ask a question…", text: Binding(get: { model.draft }, set: { model.draft = $0 }),
-                      axis: .vertical)
-                .textFieldStyle(.roundedBorder)
-                .lineLimit(1...4)
-                .onSubmit { Task { await model.send() } }
-            if let voice, voice.canSpeak, !voice.isActive, model.draft.trimmingCharacters(in: .whitespaces).isEmpty {
-                Button {
+        let empty = model.draft.trimmingCharacters(in: .whitespaces).isEmpty
+        return HStack(spacing: 10) {
+            HStack(spacing: 8) {
+                TextField("Message EchoMind…", text: Binding(get: { model.draft }, set: { model.draft = $0 }),
+                          axis: .vertical)
+                    .lineLimit(1...5)
+                    .onSubmit { Task { await model.send() } }
+                if let voice, voice.canSpeak, !voice.isActive, empty {
+                    Button { Task { await voice.startListening() } } label: {
+                        Image(systemName: "mic.fill").font(.callout).foregroundStyle(DS.brandLight)
+                    }
+                    .accessibilityLabel("Ask by voice")
+                    .disabled(model.state == .thinking)
+                }
+            }
+            .padding(.horizontal, 16).padding(.vertical, 11)
+            .background(.ultraThinMaterial, in: Capsule())
+            .background(DS.bgElevated.opacity(0.5), in: Capsule())
+            .overlay(Capsule().strokeBorder(DS.stroke.opacity(0.25), lineWidth: 1))
+
+            // Send, or hands-free when there's nothing to send.
+            if let voice, voice.canSpeak, !voice.isActive, empty {
+                circleButton("waveform", label: "Hands-free conversation", disabled: model.state == .thinking) {
                     Task { await voice.startConversation() }
-                } label: {
-                    Image(systemName: "waveform.badge.mic").font(.title2)
                 }
-                .accessibilityLabel("Hands-free conversation")
-                .disabled(model.state == .thinking)
-                Button {
-                    Task { await voice.startListening() }
-                } label: {
-                    Image(systemName: "mic.circle.fill").font(.title2)
-                }
-                .accessibilityLabel("Ask by voice")
-                .disabled(model.state == .thinking)
             } else {
-                Button {
+                circleButton("arrow.up", label: "Send question",
+                             disabled: empty || model.state == .thinking) {
                     Task { await model.send() }
-                } label: {
-                    Image(systemName: "arrow.up.circle.fill").font(.title2)
                 }
-                .accessibilityLabel("Send question")
-                .disabled(model.draft.trimmingCharacters(in: .whitespaces).isEmpty || model.state == .thinking)
             }
         }
-        .padding()
+        .padding(.horizontal).padding(.vertical, DS.sm)
+    }
+
+    private func circleButton(_ systemName: String, label: String, disabled: Bool,
+                              action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.headline.weight(.bold))
+                .foregroundStyle(.white)
+                .frame(width: 44, height: 44)
+                .background(disabled ? AnyShapeStyle(Color.gray.opacity(0.3)) : AnyShapeStyle(DS.brandGradient),
+                            in: Circle())
+        }
+        .disabled(disabled)
+        .accessibilityLabel(label)
     }
 
     private func icon(for state: VoiceSessionController.State) -> String {
@@ -182,6 +206,31 @@ struct AskView: View {
         case .speaking: return "Speaking…"
         case .failed(let message): return message
         case .idle: return ""
+        }
+    }
+}
+
+/// Three animated dots — the "assistant is typing" indicator (ChatGPT-style).
+private struct TypingIndicator: View {
+    @State private var phase = 0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        HStack(spacing: 5) {
+            ForEach(0..<3, id: \.self) { i in
+                Circle()
+                    .fill(DS.brandLight.opacity(phase == i ? 1 : 0.35))
+                    .frame(width: 7, height: 7)
+                    .scaleEffect(phase == i ? 1.2 : 1)
+            }
+        }
+        .padding(.vertical, 8)
+        .onAppear {
+            guard !reduceMotion else { return }
+            withAnimation(.easeInOut(duration: 0.4).repeatForever()) { phase = 0 }
+            Timer.scheduledTimer(withTimeInterval: 0.35, repeats: true) { _ in
+                withAnimation(.easeInOut(duration: 0.25)) { phase = (phase + 1) % 3 }
+            }
         }
     }
 }

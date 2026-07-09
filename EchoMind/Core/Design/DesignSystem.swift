@@ -1,18 +1,26 @@
 import SwiftUI
 
-/// EchoMind design system. One source of truth for color, spacing, radius, motion,
-/// and reusable surfaces so every screen looks intentional, cohesive, and alive.
+/// EchoMind design system — a deep-navy dark theme with a single electric-blue
+/// accent (no rainbow gradients), subtle grid + glow, and dark glass panels. One
+/// source of truth for color, spacing, radius, motion, and reusable surfaces.
 enum DS {
-    // Brand palette — a confident blue with violet/cyan accents for a rich aurora.
-    static let brand = Color(red: 0.04, green: 0.40, blue: 0.90)
-    static let brandDeep = Color(red: 0.02, green: 0.24, blue: 0.70)
-    static let violet = Color(red: 0.42, green: 0.24, blue: 0.88)
-    static let cyan = Color(red: 0.10, green: 0.64, blue: 0.94)
+    // Surfaces (dark navy, matching the brand look).
+    static let bg = Color(red: 0.027, green: 0.043, blue: 0.11)        // deep navy backdrop
+    static let bgElevated = Color(red: 0.06, green: 0.09, blue: 0.20)  // card/panel
+    static let stroke = Color(red: 0.29, green: 0.55, blue: 1.0)       // faint blue edges
+
+    // Brand — one confident electric blue, with a lighter tint for text.
+    static let brand = Color(red: 0.29, green: 0.55, blue: 1.0)        // #4A8CFF
+    static let brandDeep = Color(red: 0.13, green: 0.33, blue: 0.86)
+    static let brandLight = Color(red: 0.58, green: 0.78, blue: 1.0)
 
     static let brandGradient = LinearGradient(
         colors: [brand, brandDeep], startPoint: .topLeading, endPoint: .bottomTrailing)
+    /// Kept for source compatibility — now a tasteful blue (no cyan/violet).
     static let vividGradient = LinearGradient(
-        colors: [cyan, brand, violet], startPoint: .topLeading, endPoint: .bottomTrailing)
+        colors: [brandLight, brand, brandDeep], startPoint: .topLeading, endPoint: .bottomTrailing)
+    static let titleGradient = LinearGradient(
+        colors: [brandLight, brand], startPoint: .leading, endPoint: .trailing)
 
     // Spacing scale.
     static let xs: CGFloat = 4, sm: CGFloat = 8, md: CGFloat = 12
@@ -26,64 +34,48 @@ enum DS {
     static let smooth = Animation.spring(response: 0.55, dampingFraction: 0.85)
 }
 
-// MARK: - Aurora background
+// MARK: - Background
 
-/// A living, breathing brand backdrop: an animated mesh gradient that drifts
-/// slowly under the whole app. Frosted `.material` cards sit beautifully on top.
-/// Honors Reduce Motion (falls back to a still mesh) and an optional `intensity`
-/// (e.g. audio level) that blooms the colors.
+/// The signature backdrop: a deep-navy field with a faint tech grid and soft blue
+/// glows — calm and premium, not busy. `intensity` (e.g. audio level) brightens
+/// the glow. Honors Reduce Motion for the animation only.
 struct BrandBackground: View {
     var intensity: Double = 0
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack {
-            Color(.systemGroupedBackground)
-            if reduceMotion {
-                mesh(at: 0)
-            } else {
-                TimelineView(.animation) { timeline in
-                    mesh(at: timeline.date.timeIntervalSinceReferenceDate)
-                }
-            }
+            DS.bg
+            GridOverlay().opacity(0.45)
+            RadialGradient(colors: [DS.brand.opacity(0.22 + intensity * 0.22), .clear],
+                           center: .top, startRadius: 8, endRadius: 520)
+            RadialGradient(colors: [DS.brandDeep.opacity(0.18), .clear],
+                           center: .bottomTrailing, startRadius: 8, endRadius: 460)
         }
         .ignoresSafeArea()
         .animation(DS.smooth, value: intensity)
     }
+}
 
-    private func mesh(at t: TimeInterval) -> some View {
-        let bloom = 0.5 + intensity * 0.4
-        return MeshGradient(width: 3, height: 3,
-                            points: Self.points(t),
-                            colors: Self.colors)
-            .opacity(bloom)
-            .blur(radius: 2)
-    }
-
-    /// 3×3 control grid — corners pinned, interior/edge points drift on sines.
-    static func points(_ t: TimeInterval) -> [SIMD2<Float>] {
-        func w(_ speed: Double, _ amp: Double, _ phase: Double) -> Float {
-            Float(sin(t * speed + phase) * amp)
+/// A faint blueprint grid, drawn once.
+private struct GridOverlay: View {
+    var body: some View {
+        Canvas { context, size in
+            let step: CGFloat = 46
+            var path = Path()
+            var x: CGFloat = 0
+            while x <= size.width { path.move(to: CGPoint(x: x, y: 0)); path.addLine(to: CGPoint(x: x, y: size.height)); x += step }
+            var y: CGFloat = 0
+            while y <= size.height { path.move(to: CGPoint(x: 0, y: y)); path.addLine(to: CGPoint(x: size.width, y: y)); y += step }
+            context.stroke(path, with: .color(DS.brand.opacity(0.06)), lineWidth: 0.5)
         }
-        return [
-            .init(0, 0), .init(0.5 + w(0.23, 0.10, 0), 0), .init(1, 0),
-            .init(0, 0.5 + w(0.19, 0.10, 1)),
-            .init(0.5 + w(0.21, 0.10, 2), 0.5 + w(0.17, 0.10, 3)),
-            .init(1, 0.5 + w(0.20, 0.10, 4)),
-            .init(0, 1), .init(0.5 + w(0.22, 0.10, 5), 1), .init(1, 1),
-        ]
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
     }
-
-    static let colors: [Color] = [
-        DS.cyan,        DS.brand,       DS.violet,
-        DS.brand,       DS.brandDeep,   DS.brand,
-        DS.violet,      DS.brand,       DS.cyan,
-    ]
 }
 
 // MARK: - Surfaces
 
-/// A soft, elevated frosted surface with a subtle top-light and layered shadow.
+/// A dark glass panel with a faint glowing blue edge — the reference card look.
 struct GlassCard<Content: View>: View {
     var padding: CGFloat = DS.lg
     var radius: CGFloat = DS.rMd
@@ -93,21 +85,22 @@ struct GlassCard<Content: View>: View {
         content()
             .padding(padding)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
+            .background(DS.bgElevated.opacity(0.55), in: RoundedRectangle(cornerRadius: radius, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
                     .strokeBorder(
-                        LinearGradient(colors: [.white.opacity(0.35), .white.opacity(0.02)],
+                        LinearGradient(colors: [DS.stroke.opacity(0.35), DS.stroke.opacity(0.06)],
                                        startPoint: .top, endPoint: .bottom),
-                        lineWidth: 0.8))
-            .shadow(color: .black.opacity(0.10), radius: 14, y: 8)
+                        lineWidth: 1))
+            .shadow(color: .black.opacity(0.45), radius: 16, y: 8)
     }
 }
 
-// MARK: - Hero icon badge (animated)
+// MARK: - Hero icon badge
 
-/// A gradient circle badge for hero icons, with a soft glow and an optional
-/// slow breathing pulse.
+/// A rounded-square badge with a glowing blue icon on dark navy — matches the
+/// reference feature icons. Optional slow breathing pulse.
 struct BrandIconBadge: View {
     let systemName: String
     var size: CGFloat = 112
@@ -116,15 +109,18 @@ struct BrandIconBadge: View {
 
     var body: some View {
         ZStack {
-            Circle()
-                .fill(DS.vividGradient)
+            RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
+                .fill(DS.bgElevated)
+                .overlay(
+                    RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
+                        .strokeBorder(DS.brand.opacity(0.4), lineWidth: 1))
                 .frame(width: size, height: size)
-                .shadow(color: DS.brand.opacity(0.5), radius: 22, y: 12)
+                .shadow(color: DS.brand.opacity(0.5), radius: 24, y: 0)
                 .scaleEffect(breathe ? 1.04 : 1)
             Image(systemName: systemName)
-                .font(.system(size: size * 0.42, weight: .semibold))
-                .foregroundStyle(.white)
-                .shadow(color: DS.brandDeep.opacity(0.4), radius: 4, y: 2)
+                .font(.system(size: size * 0.4, weight: .semibold))
+                .foregroundStyle(DS.brandLight)
+                .shadow(color: DS.brand.opacity(0.8), radius: 10)
         }
         .onAppear {
             guard pulse else { return }
@@ -135,7 +131,7 @@ struct BrandIconBadge: View {
 
 // MARK: - Button styles
 
-/// Prominent, brand-gradient primary action with a springy press + glow.
+/// Prominent, blue primary action with a springy press + glow.
 struct BrandButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -143,20 +139,20 @@ struct BrandButtonStyle: ButtonStyle {
             .foregroundStyle(.white)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
-            .background(DS.vividGradient, in: RoundedRectangle(cornerRadius: DS.rMd, style: .continuous))
-            .shadow(color: DS.brand.opacity(configuration.isPressed ? 0.2 : 0.4),
-                    radius: configuration.isPressed ? 8 : 16, y: configuration.isPressed ? 4 : 10)
+            .background(DS.brandGradient, in: RoundedRectangle(cornerRadius: DS.rMd, style: .continuous))
+            .shadow(color: DS.brand.opacity(configuration.isPressed ? 0.25 : 0.5),
+                    radius: configuration.isPressed ? 8 : 18, y: configuration.isPressed ? 4 : 10)
             .scaleEffect(configuration.isPressed ? 0.96 : 1)
             .animation(DS.bouncy, value: configuration.isPressed)
     }
 }
 
-/// Tappable card/press feedback: a gentle spring scale, for NavigationLinks etc.
+/// Tappable card/press feedback: a gentle spring scale.
 struct PressableStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
-            .opacity(configuration.isPressed ? 0.92 : 1)
+            .opacity(configuration.isPressed ? 0.9 : 1)
             .animation(DS.bouncy, value: configuration.isPressed)
     }
 }
@@ -173,7 +169,7 @@ private struct Glow: ViewModifier {
     }
 }
 
-/// A rotating conic-gradient ring — a premium accent around hero elements.
+/// A rotating blue glow ring — a premium accent around hero elements.
 struct AnimatedRing: View {
     var lineWidth: CGFloat = 3
     @State private var angle = 0.0
@@ -182,35 +178,13 @@ struct AnimatedRing: View {
     var body: some View {
         Circle()
             .strokeBorder(
-                AngularGradient(colors: [DS.cyan, DS.brand, DS.violet, DS.cyan],
+                AngularGradient(colors: [DS.brandDeep, DS.brand, DS.brandLight, DS.brandDeep],
                                 center: .center, angle: .degrees(angle)),
                 lineWidth: lineWidth)
             .onAppear {
                 guard !reduceMotion else { return }
                 withAnimation(.linear(duration: 6).repeatForever(autoreverses: false)) { angle = 360 }
             }
-    }
-}
-
-/// Sweeping shimmer for skeletons / loading placeholders.
-private struct Shimmer: ViewModifier {
-    @State private var phase: CGFloat = -1
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    func body(content: Content) -> some View {
-        content.overlay(
-            GeometryReader { geo in
-                LinearGradient(colors: [.clear, .white.opacity(0.55), .clear],
-                               startPoint: .leading, endPoint: .trailing)
-                    .frame(width: geo.size.width * 0.6)
-                    .offset(x: phase * geo.size.width * 1.6)
-                    .blendMode(.overlay)
-            }
-            .allowsHitTesting(false)
-        )
-        .onAppear {
-            guard !reduceMotion else { return }
-            withAnimation(.linear(duration: 1.4).repeatForever(autoreverses: false)) { phase = 1 }
-        }
     }
 }
 
@@ -231,15 +205,16 @@ private struct RevealOnAppear: ViewModifier {
 }
 
 extension View {
-    /// EchoMind look, applied once at the root: rounded typeface + brand tint.
-    func echoMindStyle() -> some View { fontDesign(.rounded).tint(DS.brand) }
+    /// EchoMind look, applied once at the root: rounded typeface + brand tint + dark.
+    func echoMindStyle() -> some View {
+        fontDesign(.rounded).tint(DS.brand).preferredColorScheme(.dark)
+    }
 
     func glow(_ color: Color = DS.brand, radius: CGFloat = 10) -> some View {
         modifier(Glow(color: color, radius: radius))
     }
-    func shimmering() -> some View { modifier(Shimmer()) }
     func revealOnAppear(delay: Double = 0) -> some View { modifier(RevealOnAppear(delay: delay)) }
 
-    /// Gradient-filled text/shape using the brand vivid gradient.
-    func vividForeground() -> some View { foregroundStyle(DS.vividGradient) }
+    /// Gradient-filled text using the brand title gradient.
+    func vividForeground() -> some View { foregroundStyle(DS.titleGradient) }
 }

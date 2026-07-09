@@ -133,10 +133,14 @@ struct SessionsView: View {
             .map { ($0.key, $0.value) }
     }
 
-    private static let palette: [Color] = [DS.brand, DS.violet, DS.cyan,
-                                           Color(red: 0.95, green: 0.55, blue: 0.2),
-                                           Color(red: 0.2, green: 0.75, blue: 0.5),
-                                           Color(red: 0.9, green: 0.3, blue: 0.5)]
+    private static let palette: [Color] = [
+        DS.brand,
+        Color(red: 0.35, green: 0.72, blue: 0.98),   // sky
+        Color(red: 0.55, green: 0.5, blue: 0.98),    // periwinkle
+        Color(red: 0.98, green: 0.62, blue: 0.35),   // amber
+        Color(red: 0.3, green: 0.82, blue: 0.6),     // teal
+        Color(red: 0.95, green: 0.45, blue: 0.6),    // rose
+    ]
 
     static func color(for category: String) -> Color {
         guard category != "Ungrouped" else { return .secondary }
