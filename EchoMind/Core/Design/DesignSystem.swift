@@ -4,23 +4,24 @@ import SwiftUI
 /// accent (no rainbow gradients), subtle grid + glow, and dark glass panels. One
 /// source of truth for color, spacing, radius, motion, and reusable surfaces.
 enum DS {
-    // Surfaces (dark navy, matching the brand look).
-    static let bg = Color(red: 0.027, green: 0.043, blue: 0.11)        // deep navy backdrop
-    static let bgElevated = Color(red: 0.06, green: 0.09, blue: 0.20)  // card/panel
-    static let stroke = Color(red: 0.29, green: 0.55, blue: 1.0)       // faint blue edges
+    // Surfaces (deep navy, sampled from the reference).
+    static let bg = Color(red: 0.035, green: 0.05, blue: 0.12)         // #090D1F deep navy
+    static let bgElevated = Color(red: 0.07, green: 0.10, blue: 0.22)  // #121A38 card/panel
+    static let stroke = Color(red: 0.24, green: 0.42, blue: 0.95)      // faint royal-blue edges
 
-    // Brand — one confident electric blue, with a lighter tint for text.
-    static let brand = Color(red: 0.29, green: 0.55, blue: 1.0)        // #4A8CFF
-    static let brandDeep = Color(red: 0.13, green: 0.33, blue: 0.86)
-    static let brandLight = Color(red: 0.58, green: 0.78, blue: 1.0)
+    // Brand — the reference's royal electric blue; a mid sky-blue for text.
+    static let brand = Color(red: 0.24, green: 0.42, blue: 0.96)       // #3D6BF5 royal electric
+    static let brandDeep = Color(red: 0.13, green: 0.24, blue: 0.78)   // #2140C7
+    static let brandLight = Color(red: 0.46, green: 0.68, blue: 0.97)  // #75AEF7 sky (title/icons)
 
     static let brandGradient = LinearGradient(
         colors: [brand, brandDeep], startPoint: .topLeading, endPoint: .bottomTrailing)
-    /// Kept for source compatibility — now a tasteful blue (no cyan/violet).
+    /// Kept for source compatibility — a single tasteful blue (no cyan/violet).
     static let vividGradient = LinearGradient(
-        colors: [brandLight, brand, brandDeep], startPoint: .topLeading, endPoint: .bottomTrailing)
+        colors: [brand, brandDeep], startPoint: .topLeading, endPoint: .bottomTrailing)
     static let titleGradient = LinearGradient(
-        colors: [brandLight, brand], startPoint: .leading, endPoint: .trailing)
+        colors: [brandLight, Color(red: 0.29, green: 0.51, blue: 0.91)],
+        startPoint: .leading, endPoint: .trailing)
 
     // Spacing scale.
     static let xs: CGFloat = 4, sm: CGFloat = 8, md: CGFloat = 12
