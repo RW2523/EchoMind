@@ -76,4 +76,22 @@ import Foundation
         #expect(urls.count == 3)   // 2 sessions + documents-list.md
         #expect(urls.contains { $0.lastPathComponent == "documents-list.md" })
     }
+
+    @Test func exportIncludesRetainedAudio() async throws {
+        let (sessions, documents, _, _) = try makeStack()
+        let withAudio = UUID()
+        try await sessions.create(SessionSnapshot(id: withAudio, title: "Recorded Meeting"))
+        try await sessions.create(SessionSnapshot(title: "Notes Only"))   // no audio
+
+        let audioStore = tempAudioStore()
+        try Data(repeating: 7, count: 128).write(to: audioStore.prepareURL(for: withAudio))
+
+        let urls = try await DefaultDataExportService(
+            sessions: sessions, documents: documents, audioStore: audioStore).exportAll()
+
+        // 2 transcripts + exactly one .m4a (only the recorded session had audio).
+        #expect(urls.filter { $0.pathExtension == "m4a" }.count == 1)
+        #expect(urls.contains { $0.lastPathComponent == "Recorded Meeting.m4a" })
+        #expect(urls.contains { $0.lastPathComponent == "Recorded Meeting.md" })
+    }
 }

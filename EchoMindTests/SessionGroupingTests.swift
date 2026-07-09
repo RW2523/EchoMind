@@ -9,7 +9,7 @@ private final class RecordingGateway: ModelGateway, @unchecked Sendable {
     init(category: MeetingCategory) { self.category = category }
 
     func respond(instructions: String, prompt: String, maxOutputTokens: Int) async throws -> String { "" }
-    func generate<T: Generable & Sendable>(instructions: String, prompt: String, as type: T.Type) async throws -> T {
+    func generate<T: Generable & Sendable>(instructions: String, prompt: String, as type: T.Type, maxOutputTokens: Int) async throws -> T {
         lastInstructions = instructions
         return category as! T
     }

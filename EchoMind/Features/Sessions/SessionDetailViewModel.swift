@@ -128,18 +128,17 @@ final class SessionDetailViewModel {
     }
 
     private func normalizedActionStates() -> [Bool] {
-        let count = currentSummary()?.actionItems.count ?? 0
-        var states = session.actionStates
-        if states.count < count { states += Array(repeating: false, count: count - states.count) }
-        else if states.count > count { states = Array(states.prefix(count)) }
-        return states
+        // Keyed by item text (not position), so checkmarks track the right item even
+        // after a regeneration reorders or replaces action items.
+        ActionItemCompletion.flags(from: session.actionStatesJSON, items: currentSummary()?.actionItems ?? [])
     }
 
     /// Toggle an action item's completion and persist it (user state, not model output).
     func toggleAction(_ index: Int) {
-        guard index >= 0, index < actionStates.count else { return }
+        let items = currentSummary()?.actionItems ?? []
+        guard index >= 0, index < actionStates.count, index < items.count else { return }
         actionStates[index].toggle()
-        let json = (try? String(decoding: JSONEncoder().encode(actionStates), as: UTF8.self)) ?? "[]"
+        let json = ActionItemCompletion.json(items: items, flags: actionStates)
         let id = session.id
         Task { try? await repository.setActionStates(json, sessionId: id) }
     }

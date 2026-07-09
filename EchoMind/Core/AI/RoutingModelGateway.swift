@@ -35,8 +35,8 @@ nonisolated struct RoutingModelGateway: ModelGateway {
         try await select().respond(instructions: instructions, prompt: prompt, maxOutputTokens: maxOutputTokens)
     }
 
-    func generate<T: Generable & Sendable>(instructions: String, prompt: String, as type: T.Type) async throws -> T {
-        try await select().generate(instructions: instructions, prompt: prompt, as: type)
+    func generate<T: Generable & Sendable>(instructions: String, prompt: String, as type: T.Type, maxOutputTokens: Int) async throws -> T {
+        try await select().generate(instructions: instructions, prompt: prompt, as: type, maxOutputTokens: maxOutputTokens)
     }
 
     private func select() async throws -> any ModelGateway {

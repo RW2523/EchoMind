@@ -19,13 +19,13 @@ nonisolated struct FoundationModelService: ModelGateway {
         }
     }
 
-    func generate<T: Generable & Sendable>(instructions: String, prompt: String, as type: T.Type) async throws -> T {
+    func generate<T: Generable & Sendable>(instructions: String, prompt: String, as type: T.Type, maxOutputTokens: Int) async throws -> T {
         let session = LanguageModelSession(instructions: instructions)
         do {
             let response = try await session.respond(
                 to: prompt,
                 generating: type,
-                options: GenerationOptions(maximumResponseTokens: SummaryPrompts.reduceOutputTokens))
+                options: GenerationOptions(maximumResponseTokens: maxOutputTokens))
             return response.content
         } catch let error as LanguageModelSession.GenerationError {
             throw Self.mapped(error)

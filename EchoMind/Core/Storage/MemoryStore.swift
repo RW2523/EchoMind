@@ -24,11 +24,33 @@ actor SwiftDataMemoryStore: MemoryStore {
     }
 
     func add(_ facts: [MemoryFactSnapshot]) async throws {
+        guard !facts.isEmpty else { return }
+        // Dedup by normalized text — against what's already stored AND within this batch.
+        // The distiller re-derives the same durable facts across meetings; without this,
+        // duplicates accumulate and eviction (prune) pushes out genuinely distinct facts.
+        let existing = try modelContext.fetch(FetchDescriptor<MemoryFact>())
+        var seen = [String: MemoryFact]()
+        for fact in existing where seen[Self.normalize(fact.text)] == nil {
+            seen[Self.normalize(fact.text)] = fact
+        }
         for fact in facts {
-            modelContext.insert(MemoryFact(id: fact.id, kind: fact.kind, text: fact.text,
-                                           sourceSessionId: fact.sourceSessionId, updatedAt: fact.updatedAt))
+            let key = Self.normalize(fact.text)
+            guard !key.isEmpty else { continue }
+            if let match = seen[key] {
+                // Same fact seen again — refresh recency so it survives pruning, no dupe.
+                match.updatedAt = max(match.updatedAt, fact.updatedAt)
+            } else {
+                let model = MemoryFact(id: fact.id, kind: fact.kind, text: fact.text,
+                                       sourceSessionId: fact.sourceSessionId, updatedAt: fact.updatedAt)
+                modelContext.insert(model)
+                seen[key] = model
+            }
         }
         try modelContext.save()
+    }
+
+    private static func normalize(_ text: String) -> String {
+        text.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     func retire(matching texts: [String]) async throws {

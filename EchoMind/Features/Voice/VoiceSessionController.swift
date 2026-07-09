@@ -34,6 +34,13 @@ final class VoiceSessionController {
     private var endpointTimer: Task<Void, Never>?
     private var handsFree = false
     private var endpointer = TurnEndpointer()
+    /// V3 hands-free barge-in: while the agent speaks, the mic stays open (echo
+    /// cancellation on) and this task watches for the user starting to talk.
+    private var bargeMonitorTask: Task<Void, Never>?
+    private let onsetDetector = SpeechOnsetDetector()
+    /// Set when a *spoken* interruption took over the mic, so the speaking teardown
+    /// doesn't also stop the mic / start a second listen turn (avoids a double-start).
+    private var voiceBargedIn = false
 
     init(input: any VoiceInput,
          synthesizer: any SpeechSynthesizing,
@@ -128,8 +135,11 @@ final class VoiceSessionController {
     /// Barge-out / abort from any state: stop STT + TTS + generation and reset.
     func cancel() {
         handsFree = false
+        voiceBargedIn = false
         endpointTimer?.cancel()
         endpointTimer = nil
+        bargeMonitorTask?.cancel()
+        bargeMonitorTask = nil
         listenTask?.cancel()
         answerTask?.cancel()
         sentenceContinuation?.finish()
@@ -151,15 +161,68 @@ final class VoiceSessionController {
 
     func stopConversation() { cancel() }
 
-    /// User starts speaking while the agent is talking: stop TTS + generation and
-    /// (hands-free) immediately open a fresh turn.
+    /// User taps ✋ (or a spoken interruption is detected) while the agent is talking:
+    /// stop TTS + generation and (hands-free) immediately open a fresh turn.
     func bargeIn() {
         guard state == .speaking || state == .thinking else { return }
+        performBargeIn()
+    }
+
+    /// A spoken interruption detected by the hands-free barge monitor.
+    private func handleVoiceBargeIn() {
+        guard handsFree, state == .speaking || state == .thinking else { return }
+        performBargeIn()
+    }
+
+    private func performBargeIn() {
+        bargeMonitorTask?.cancel()
+        bargeMonitorTask = nil
         answerTask?.cancel()
         sentenceContinuation?.finish()
         synthesizer.stop()
         state = .idle
-        if handsFree { Task { await beginListenTurn() } }
+        guard handsFree else { return }
+        // The monitor (or the just-ended listen turn) still owns the mic; release it,
+        // then open a clean turn. `voiceBargedIn` tells the speaking teardown to stand
+        // down so we never start two capture sessions at once.
+        voiceBargedIn = true
+        Task { [weak self] in
+            guard let self else { return }
+            _ = await self.input.stop()
+            await self.beginListenTurn()
+        }
+    }
+
+    /// While the agent speaks hands-free, keep the mic open (echo cancellation on) and
+    /// watch for the user starting to talk, so they can interrupt by voice — not only
+    /// with the ✋ button. Fail-safe: any mic error just means no barge-in this turn.
+    private func startBargeMonitor() async {
+        guard handsFree else { return }
+        voiceBargedIn = false
+        // Open the mic up front (awaited) so ownership is deterministic: by the time we
+        // speak — and later stop the monitor — start() has fully completed, so a normal
+        // teardown can never race a half-started capture.
+        let partials: AsyncStream<String>
+        do { partials = try await input.start() } catch { return }   // no barge-in this turn
+        let detector = onsetDetector
+        bargeMonitorTask = Task { [weak self] in
+            for await partial in partials {
+                guard let self, !Task.isCancelled else { return }
+                guard self.state == .speaking || self.state == .thinking else { return }
+                if detector.detectedOnset(in: partial) {
+                    self.handleVoiceBargeIn()
+                    return
+                }
+            }
+        }
+    }
+
+    /// Tear down the barge monitor after a hands-free answer finishes normally, and
+    /// release its mic session so the next listen turn starts from a clean state.
+    private func stopBargeMonitor() async {
+        bargeMonitorTask?.cancel()
+        bargeMonitorTask = nil
+        if !voiceBargedIn { _ = await input.stop() }
     }
 
     private func beginListenTurn() async {
@@ -208,11 +271,15 @@ final class VoiceSessionController {
             if handsFree { await beginListenTurn() } else { state = .idle }
             return
         }
+        // Keep the mic open through the answer so the user can interrupt by voice.
+        await startBargeMonitor()
         if let onQuestionStream {
             await speakStreaming(onQuestionStream(trimmed))
         } else {
             await speakOneShot(trimmed)
         }
-        if handsFree, state == .idle { await beginListenTurn() }
+        await stopBargeMonitor()
+        // If a spoken barge-in fired, it already owns the next turn — don't double-start.
+        if handsFree, !voiceBargedIn, state == .idle { await beginListenTurn() }
     }
 }

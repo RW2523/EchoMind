@@ -10,7 +10,7 @@ private actor RecordingGateway: ModelGateway {
 
     func respond(instructions: String, prompt: String, maxOutputTokens: Int) async throws -> String { name }
 
-    func generate<T: Generable & Sendable>(instructions: String, prompt: String, as type: T.Type) async throws -> T {
+    func generate<T: Generable & Sendable>(instructions: String, prompt: String, as type: T.Type, maxOutputTokens: Int) async throws -> T {
         throw ModelGatewayError.generationFailed(name)
     }
 }

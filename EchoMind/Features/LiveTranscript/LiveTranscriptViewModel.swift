@@ -112,6 +112,10 @@ final class LiveTranscriptViewModel {
         level = 0
 
         do {
+            // Plain meeting recording: ensure echo cancellation is OFF (the voice
+            // agent turns it on and the audio actor is shared, so it would otherwise
+            // stay on and alter the input format/gain, degrading transcription).
+            await audio.setVoiceProcessing(false)
             let buffers = try await audio.start()
             // P17: tee the capture stream to an AAC file when retention is on. The
             // write completes before each buffer is forwarded, so the transcriber

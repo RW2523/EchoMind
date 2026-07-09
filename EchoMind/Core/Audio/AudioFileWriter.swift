@@ -51,6 +51,12 @@ actor AudioFileWriter {
         let created = try AVAudioFile(forWriting: url, settings: settings,
                                       commonFormat: format.commonFormat,
                                       interleaved: format.isInterleaved)
+        // Protect the recording at rest. Directory-level protection doesn't inherit to
+        // files created inside it on iOS, so set it explicitly. `.completeUnlessOpen`
+        // matches the database + audio directory: encrypted when the device locks, but
+        // a file already open (this in-progress recording) keeps working past lock.
+        try? FileManager.default.setAttributes(
+            [.protectionKey: FileProtectionType.completeUnlessOpen], ofItemAtPath: url.path)
         file = created
         return created
     }

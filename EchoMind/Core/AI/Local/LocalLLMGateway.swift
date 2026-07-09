@@ -9,12 +9,10 @@ import FoundationModels
 nonisolated struct LocalLLMGateway: ModelGateway {
     let engine: any LocalLLMEngine
     let maxRetries: Int
-    let guidedOutputTokens: Int
 
-    init(engine: any LocalLLMEngine, maxRetries: Int = 2, guidedOutputTokens: Int = 700) {
+    init(engine: any LocalLLMEngine, maxRetries: Int = 2) {
         self.engine = engine
         self.maxRetries = maxRetries
-        self.guidedOutputTokens = guidedOutputTokens
     }
 
     func respond(instructions: String, prompt: String, maxOutputTokens: Int) async throws -> String {
@@ -27,7 +25,7 @@ nonisolated struct LocalLLMGateway: ModelGateway {
         }
     }
 
-    func generate<T: Generable & Sendable>(instructions: String, prompt: String, as type: T.Type) async throws -> T {
+    func generate<T: Generable & Sendable>(instructions: String, prompt: String, as type: T.Type, maxOutputTokens: Int) async throws -> T {
         try await ensureLoaded()
         let guidance = try GuidedJSON.instruction(for: type)
         var system = instructions + "\n\n" + guidance
@@ -36,7 +34,7 @@ nonisolated struct LocalLLMGateway: ModelGateway {
         for attempt in 0...maxRetries {
             let messages = [LLMMessage(.system, system), LLMMessage(.user, prompt)]
             do {
-                let raw = try await engine.complete(messages: messages, maxTokens: guidedOutputTokens)
+                let raw = try await engine.complete(messages: messages, maxTokens: maxOutputTokens)
                 return try GuidedJSON.decode(raw, as: type)
             } catch {
                 lastError = error

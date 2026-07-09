@@ -148,7 +148,8 @@ nonisolated struct RAGPipeline: RAGService {
         let result = try await gateway.generate(
             instructions: RAGPrompts.hybrid,
             prompt: RAGPrompts.prompt(memory: memory, question: question, context: context, knownFacts: facts),
-            as: RAGAnswer.self)
+            as: RAGAnswer.self,
+            maxOutputTokens: Self.outputReserve)
         let text = result.answer.trimmingCharacters(in: .whitespacesAndNewlines)
         let followUps = Array(result.followUps.prefix(3))
         if result.usedProvidedContext && !packed.isEmpty {

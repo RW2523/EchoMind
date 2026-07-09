@@ -6,7 +6,7 @@ import FoundationModels
 private struct StubContinuityGateway: ModelGateway {
     let notes: [String]
     func respond(instructions: String, prompt: String, maxOutputTokens: Int) async throws -> String { "" }
-    func generate<T: Generable & Sendable>(instructions: String, prompt: String, as type: T.Type) async throws -> T {
+    func generate<T: Generable & Sendable>(instructions: String, prompt: String, as type: T.Type, maxOutputTokens: Int) async throws -> T {
         ContinuityNotes(notes: notes) as! T
     }
 }
