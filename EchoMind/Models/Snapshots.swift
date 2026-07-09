@@ -14,10 +14,12 @@ nonisolated struct SessionSnapshot: Sendable, Hashable, Identifiable {
     var summaryJSON: String?
     var origin: SessionOrigin
     var tags: [String]
+    var reportState: ReportState
+    var actionStatesJSON: String?
 
     init(id: UUID = UUID(), title: String, createdAt: Date = Date(), updatedAt: Date = Date(),
          duration: TimeInterval = 0, summaryJSON: String? = nil, origin: SessionOrigin = .live,
-         tags: [String] = []) {
+         tags: [String] = [], reportState: ReportState = .none, actionStatesJSON: String? = nil) {
         self.id = id
         self.title = title
         self.createdAt = createdAt
@@ -26,6 +28,15 @@ nonisolated struct SessionSnapshot: Sendable, Hashable, Identifiable {
         self.summaryJSON = summaryJSON
         self.origin = origin
         self.tags = tags
+        self.reportState = reportState
+        self.actionStatesJSON = actionStatesJSON
+    }
+
+    /// Action-item completion flags decoded from `actionStatesJSON`.
+    var actionStates: [Bool] {
+        guard let json = actionStatesJSON, let data = json.data(using: .utf8),
+              let states = try? JSONDecoder().decode([Bool].self, from: data) else { return [] }
+        return states
     }
 }
 

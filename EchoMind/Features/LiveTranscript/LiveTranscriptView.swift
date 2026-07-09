@@ -25,6 +25,7 @@ struct LiveTranscriptView: View {
                     sessions: dependencies.sessionRepository,
                     permissions: dependencies.permissions,
                     indexer: dependencies.indexer,
+                    reportGenerator: dependencies.reportGenerator,
                     retainAudio: dependencies.settingsStore.audioRetentionEnabled,
                     audioStore: dependencies.audioStore)
             }

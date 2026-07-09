@@ -38,17 +38,28 @@ struct SummarySectionView: View {
         }
         group("Key Decisions", summary.keyDecisions)
         if !summary.actionItems.isEmpty {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 8) {
                 Text("Action Items").font(.subheadline.bold())
-                ForEach(summary.actionItems, id: \.text) { item in
-                    HStack(alignment: .top, spacing: 6) {
-                        Text("•")
-                        Text(item.text)
-                        if let owner = item.owner, !owner.isEmpty {
-                            Text(owner).font(.caption).padding(.horizontal, 6).padding(.vertical, 1)
-                                .background(.tint.opacity(0.15), in: Capsule())
+                ForEach(Array(summary.actionItems.enumerated()), id: \.offset) { index, item in
+                    let done = index < model.actionStates.count && model.actionStates[index]
+                    Button {
+                        model.toggleAction(index)
+                    } label: {
+                        HStack(alignment: .top, spacing: 8) {
+                            Image(systemName: done ? "checkmark.circle.fill" : "circle")
+                                .foregroundStyle(done ? DS.brand : .secondary)
+                            Text(item.text)
+                                .strikethrough(done, color: .secondary)
+                                .foregroundStyle(done ? .secondary : .primary)
+                            if let owner = item.owner, !owner.isEmpty {
+                                Text(owner).font(.caption).padding(.horizontal, 6).padding(.vertical, 1)
+                                    .background(DS.brand.opacity(0.15), in: Capsule())
+                            }
+                            Spacer(minLength: 0)
                         }
                     }
+                    .buttonStyle(.plain)
+                    .animation(DS.bouncy, value: done)
                 }
             }
         }

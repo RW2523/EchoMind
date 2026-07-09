@@ -27,6 +27,7 @@ final class AppDependencies {
     /// resolved this launch (e.g. user switched to EmbeddingGemma) → rebuild needed.
     var embeddingIndexStale: Bool
     let summarizer: any SummarizerService
+    let reportGenerator: any ReportGenerating
     let documentImporter: any DocumentImportService
     let embeddingService: any EmbeddingService
     let vectorSearch: VectorSearch
@@ -138,7 +139,11 @@ final class AppDependencies {
                 }
             })
         self.modelGateway = routing
-        self.summarizer = MapReduceSummarizer(gateway: routing, budgeter: budgeter)
+        let summarizer = MapReduceSummarizer(gateway: routing, budgeter: budgeter)
+        self.summarizer = summarizer
+        self.reportGenerator = ReportPipeline(
+            sessions: sessionRepo, summarizer: summarizer,
+            availability: { await MainActor.run { monitor.status } })
         self.ragService = RAGPipeline(
             chunks: chunkRepo, embedder: embedder, search: VectorSearch(),
             gateway: routing, budgeter: budgeter,

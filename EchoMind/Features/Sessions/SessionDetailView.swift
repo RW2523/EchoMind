@@ -22,7 +22,8 @@ struct SessionDetailView: View {
                     summarizer: dependencies.summarizer,
                     availability: dependencies.availabilityMonitor,
                     audioStore: dependencies.audioStore,
-                    diarizer: dependencies.diarizer)
+                    diarizer: dependencies.diarizer,
+                    reportGenerator: dependencies.reportGenerator)
                 model = vm
                 await vm.load()
             }

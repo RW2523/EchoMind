@@ -15,6 +15,7 @@ final class SessionDetailViewModel {
     private(set) var segments: [SegmentSnapshot] = []
     private(set) var summaryState: SummaryState = .none
     private(set) var isIdentifyingSpeakers = false
+    private(set) var actionStates: [Bool] = []
     var draftTitle: String
 
     private let repository: any SessionRepository
@@ -22,18 +23,22 @@ final class SessionDetailViewModel {
     private let availability: any AvailabilityProviding
     private let audioStore: AudioStore
     private let diarizer: any DiarizationService
+    private let reportGenerator: (any ReportGenerating)?
+    private var pendingWatcher: Task<Void, Never>?
 
     init(session: SessionSnapshot,
          repository: any SessionRepository,
          summarizer: any SummarizerService,
          availability: any AvailabilityProviding,
          audioStore: AudioStore = AudioStore(),
-         diarizer: any DiarizationService = UnavailableDiarizationService()) {
+         diarizer: any DiarizationService = UnavailableDiarizationService(),
+         reportGenerator: (any ReportGenerating)? = nil) {
         self.session = session
         self.draftTitle = session.title
         self.repository = repository
         self.summarizer = summarizer
         self.availability = availability
+        self.reportGenerator = reportGenerator
         self.audioStore = audioStore
         self.diarizer = diarizer
     }
@@ -64,22 +69,76 @@ final class SessionDetailViewModel {
         }
     }
 
+    private var isManuallyGenerating = false
+
     func load() async {
+        if let fresh = try? await repository.fetchSession(id: session.id) { session = fresh }
         segments = (try? await repository.fetchSegments(sessionId: session.id)) ?? []
+        actionStates = normalizedActionStates()
         refreshSummaryState()
+        watchPendingReportIfNeeded()
     }
 
     func refreshSummaryState() {
-        if case .generating = summaryState { return }
-        if let json = session.summaryJSON,
-           let summary = try? JSONDecoder().decode(MeetingSummary.self, from: Data(json.utf8)) {
+        if isManuallyGenerating { return }
+        if let summary = currentSummary() {
             summaryState = .available(summary)
             return
         }
-        switch availability.status {
-        case .tierA: summaryState = .none
-        case .tierB(let reason): summaryState = .requiresAppleIntelligence(reason)
+        switch session.reportState {
+        case .pending:
+            summaryState = .generating(.reducing)
+        case .failed:
+            summaryState = .failed("The report didn't finish generating.")
+        case .none, .ready, .unavailable:
+            switch availability.status {
+            case .tierA: summaryState = .none
+            case .tierB(let reason): summaryState = .requiresAppleIntelligence(reason)
+            }
         }
+    }
+
+    /// R1: while a report is generating in the background, poll for completion so
+    /// the detail updates without any user action.
+    private func watchPendingReportIfNeeded() {
+        guard session.reportState == .pending, session.summaryJSON == nil else { return }
+        pendingWatcher?.cancel()
+        pendingWatcher = Task { [weak self] in
+            for _ in 0..<15 {
+                try? await Task.sleep(for: .milliseconds(1200))
+                guard let self, !self.isManuallyGenerating else { return }
+                guard let fresh = try? await self.repository.fetchSession(id: self.session.id) else { continue }
+                if fresh.reportState != .pending || fresh.summaryJSON != nil {
+                    self.session = fresh
+                    self.actionStates = self.normalizedActionStates()
+                    self.refreshSummaryState()
+                    return
+                }
+            }
+        }
+    }
+
+    private func currentSummary() -> MeetingSummary? {
+        guard let json = session.summaryJSON,
+              let summary = try? JSONDecoder().decode(MeetingSummary.self, from: Data(json.utf8)) else { return nil }
+        return summary
+    }
+
+    private func normalizedActionStates() -> [Bool] {
+        let count = currentSummary()?.actionItems.count ?? 0
+        var states = session.actionStates
+        if states.count < count { states += Array(repeating: false, count: count - states.count) }
+        else if states.count > count { states = Array(states.prefix(count)) }
+        return states
+    }
+
+    /// Toggle an action item's completion and persist it (user state, not model output).
+    func toggleAction(_ index: Int) {
+        guard index >= 0, index < actionStates.count else { return }
+        actionStates[index].toggle()
+        let json = (try? String(decoding: JSONEncoder().encode(actionStates), as: UTF8.self)) ?? "[]"
+        let id = session.id
+        Task { try? await repository.setActionStates(json, sessionId: id) }
     }
 
     func generateSummary() async {
@@ -87,19 +146,20 @@ final class SessionDetailViewModel {
             SegmentText(text: $0.text, startTime: $0.startTime, endTime: $0.endTime)
         }
         let previous = summaryState
+        isManuallyGenerating = true
         summaryState = .generating(.planning)
+        defer { isManuallyGenerating = false }
         do {
             let summary = try await summarizer.summarize(segments: snapshots) { [weak self] progress in
                 Task { @MainActor in
                     if case .generating = self?.summaryState { self?.summaryState = .generating(progress) }
                 }
             }
-            let json = String(data: try JSONEncoder().encode(summary), encoding: .utf8)
-            try? await repository.update(
-                SessionSnapshot(id: session.id, title: session.title, createdAt: session.createdAt,
-                                updatedAt: Date(), duration: session.duration, summaryJSON: json,
-                                origin: session.origin, tags: session.tags))
+            let json = String(decoding: try JSONEncoder().encode(summary), as: UTF8.self)
+            try? await repository.setReport(summaryJSON: json, sessionId: session.id)
             session.summaryJSON = json
+            session.reportState = .ready
+            actionStates = normalizedActionStates()
             summaryState = .available(summary)
         } catch is CancellationError {
             summaryState = previous
@@ -108,6 +168,7 @@ final class SessionDetailViewModel {
         } catch SummarizerError.tooLong {
             summaryState = .failed("This session is too long to summarize.")
         } catch {
+            try? await repository.setReportState(.failed, sessionId: session.id)
             summaryState = .failed("Couldn't summarize this content.")
         }
     }
