@@ -26,4 +26,12 @@ nonisolated protocol SessionRepository: Sendable {
 
     // M3: persist diarization results (segmentId → speaker label).
     func setSpeakerLabels(_ labels: [UUID: String], sessionId: UUID) async throws
+
+    // R1: auto-report — these touch only the report columns (never clobber the rest).
+    func setReportState(_ state: ReportState, sessionId: UUID) async throws
+    func setReport(summaryJSON: String, sessionId: UUID) async throws
+    func setActionStates(_ statesJSON: String, sessionId: UUID) async throws
+
+    // R2: AI grouping — category + topic tags (slot 0 = category).
+    func setTags(_ tags: [String], sessionId: UUID) async throws
 }

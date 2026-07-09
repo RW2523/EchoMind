@@ -41,6 +41,7 @@ final class LiveTranscriptViewModel {
     private let sessions: any SessionRepository
     private let permissions: any PermissionManaging
     private let indexer: (any IndexerService)?
+    private let reportGenerator: (any ReportGenerating)?
     private let locale: Locale
     private let retainAudio: Bool
     private let audioStore: AudioStore
@@ -57,6 +58,7 @@ final class LiveTranscriptViewModel {
          sessions: any SessionRepository,
          permissions: any PermissionManaging,
          indexer: (any IndexerService)? = nil,
+         reportGenerator: (any ReportGenerating)? = nil,
          retainAudio: Bool = false,
          audioStore: AudioStore = AudioStore(),
          locale: Locale = .current) {
@@ -66,6 +68,7 @@ final class LiveTranscriptViewModel {
         self.sessions = sessions
         self.permissions = permissions
         self.indexer = indexer
+        self.reportGenerator = reportGenerator
         self.retainAudio = retainAudio
         self.audioStore = audioStore
         self.locale = locale
@@ -268,8 +271,14 @@ final class LiveTranscriptViewModel {
         eventTask?.cancel()
         updateTask?.cancel()
         await finalize()
-        if let indexer, let id = sessionId {
-            Task { [indexer] in try? await indexer.indexSession(id: id) }
+        if let id = sessionId {
+            // Index for RAG, then auto-generate the report in the background (R1).
+            let indexer = self.indexer
+            let reportGenerator = self.reportGenerator
+            Task {
+                try? await indexer?.indexSession(id: id)
+                await reportGenerator?.generateReport(sessionId: id)
+            }
         }
         phase = .idle
     }

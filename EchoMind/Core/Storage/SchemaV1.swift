@@ -15,6 +15,7 @@ enum SchemaV1: VersionedSchema {
             KnowledgeChunk.self,
             ChatMessage.self,
             AppSettings.self,
+            MemoryFact.self,
         ]
     }
 }

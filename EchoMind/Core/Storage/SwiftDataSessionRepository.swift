@@ -100,6 +100,32 @@ actor SwiftDataSessionRepository: SessionRepository {
         try modelContext.save()
     }
 
+    func setReportState(_ state: ReportState, sessionId: UUID) async throws {
+        guard let session = try sessionModel(id: sessionId) else { throw StorageError.sessionNotFound }
+        session.reportState = state
+        try modelContext.save()
+    }
+
+    func setReport(summaryJSON: String, sessionId: UUID) async throws {
+        guard let session = try sessionModel(id: sessionId) else { throw StorageError.sessionNotFound }
+        session.summaryJSON = summaryJSON
+        session.reportState = .ready
+        session.updatedAt = Date()
+        try modelContext.save()
+    }
+
+    func setActionStates(_ statesJSON: String, sessionId: UUID) async throws {
+        guard let session = try sessionModel(id: sessionId) else { throw StorageError.sessionNotFound }
+        session.actionStatesJSON = statesJSON
+        try modelContext.save()
+    }
+
+    func setTags(_ tags: [String], sessionId: UUID) async throws {
+        guard let session = try sessionModel(id: sessionId) else { throw StorageError.sessionNotFound }
+        session.tags = tags
+        try modelContext.save()
+    }
+
     // MARK: - Helpers
 
     private func sessionModel(id: UUID) throws -> Session? {

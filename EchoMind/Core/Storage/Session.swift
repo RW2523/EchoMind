@@ -17,6 +17,10 @@ final class Session {
     /// SessionOrigin raw value (spec §8 Session.sourceType: live | import).
     var originRaw: String
     var tags: [String]
+    /// R1: auto-report lifecycle (ReportState raw). Additive default → lightweight migration.
+    var reportStateRaw: String = ReportState.none.rawValue
+    /// R1: JSON `[Bool]` of action-item completion, indexed by position. nil = none checked.
+    var actionStatesJSON: String?
 
     @Relationship(deleteRule: .cascade, inverse: \TranscriptSegment.session)
     var segments: [TranscriptSegment] = []
@@ -24,6 +28,11 @@ final class Session {
     var origin: SessionOrigin {
         get { SessionOrigin(rawValue: originRaw) ?? .live }
         set { originRaw = newValue.rawValue }
+    }
+
+    var reportState: ReportState {
+        get { ReportState(rawValue: reportStateRaw) ?? .none }
+        set { reportStateRaw = newValue.rawValue }
     }
 
     init(id: UUID = UUID(), title: String, createdAt: Date = Date(), updatedAt: Date = Date(),
@@ -42,6 +51,7 @@ final class Session {
     /// Snapshot of scalar fields only (segments fetched separately by the repo).
     var snapshot: SessionSnapshot {
         SessionSnapshot(id: id, title: title, createdAt: createdAt, updatedAt: updatedAt,
-                        duration: duration, summaryJSON: summaryJSON, origin: origin, tags: tags)
+                        duration: duration, summaryJSON: summaryJSON, origin: origin, tags: tags,
+                        reportState: reportState, actionStatesJSON: actionStatesJSON)
     }
 }
