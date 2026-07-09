@@ -23,8 +23,14 @@ nonisolated struct AudioStore: Sendable {
     }
 
     /// Creates the audio directory if needed; returns the file URL to write to.
+    /// The directory is set to `.completeUnlessOpen` so recordings are encrypted at
+    /// rest but stay writable during background recording while the phone is locked.
     func prepareURL(for sessionId: UUID) throws -> URL {
-        try FileManager.default.createDirectory(at: baseDirectory, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(
+            at: baseDirectory, withIntermediateDirectories: true,
+            attributes: [.protectionKey: FileProtectionType.completeUnlessOpen])
+        try? FileManager.default.setAttributes(
+            [.protectionKey: FileProtectionType.completeUnlessOpen], ofItemAtPath: baseDirectory.path)
         return url(for: sessionId)
     }
 
