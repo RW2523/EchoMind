@@ -22,6 +22,7 @@ struct EchoMindApp: App {
                     .environment(dependencies)
                     #if DEBUG
                     .task { await AskSelfTest.runIfRequested(dependencies) }
+                    .task { await DemoSeed.runIfRequested(dependencies) }
                     #endif
             } else {
                 StorageUnavailableView(message: launchError ?? "Unknown error")
