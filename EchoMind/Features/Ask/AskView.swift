@@ -105,7 +105,10 @@ struct AskView: View {
         .background(BrandBackground())
         .fullScreenCover(isPresented: $showVoiceMode) {
             if let voice {
-                VoiceConversationView(voice: voice) { showVoiceMode = false }
+                VoiceConversationView(voice: voice,
+                                      suggestBetterVoice: dependencies.shouldSuggestBetterVoice) {
+                    showVoiceMode = false
+                }
             }
         }
     }

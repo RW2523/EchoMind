@@ -22,4 +22,13 @@ import AVFoundation
         let picked = SystemSpeechSynthesizer.bestVoice(for: Locale(identifier: "en_US"))
         #expect(picked?.quality == .premium || picked?.quality == .enhanced)
     }
+
+    @Test func nudgeAgreesWithAvailableQuality() {
+        // The "install a better voice" nudge must fire iff no enhanced/premium voice
+        // exists for the language — never contradict what bestVoice could pick.
+        let english = AVSpeechSynthesisVoice.speechVoices().filter { $0.language.lowercased().hasPrefix("en") }
+        let hasBetter = english.contains { $0.quality == .enhanced || $0.quality == .premium }
+        let nudge = SystemSpeechSynthesizer.onlyDefaultQualityAvailable(for: Locale(identifier: "en_US"))
+        if !english.isEmpty { #expect(nudge == !hasBetter) }
+    }
 }

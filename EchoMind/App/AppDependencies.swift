@@ -210,6 +210,19 @@ final class AppDependencies {
         }
     }
 
+    /// True when the voice agent is on the system TTS floor AND the device has only
+    /// default-quality voices installed → worth nudging the user to install a richer
+    /// one. False once Kokoro or an enhanced/premium system voice is in play.
+    @MainActor
+    var shouldSuggestBetterVoice: Bool {
+        let choice = SpeechSynthesizerResolver().choice(
+            selectedVoiceModelID: aiSettings.selectedVoiceModelID,
+            isDownloaded: { aiSettings.isDownloaded($0) },
+            packageLinked: Self.ttsPackageLinked)
+        guard case .systemAV = choice else { return false }   // Kokoro selected → no nudge
+        return SystemSpeechSynthesizer.onlyDefaultQualityAvailable()
+    }
+
     private static var ttsPackageLinked: Bool {
         #if canImport(FluidAudioTTS)
         return true

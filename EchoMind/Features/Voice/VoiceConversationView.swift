@@ -6,9 +6,12 @@ import SwiftUI
 /// hands-free loop (listen → answer → listen) runs for as long as the screen is up.
 struct VoiceConversationView: View {
     let voice: VoiceSessionController
+    /// When true, the device only has default-quality system voices — offer a tip.
+    var suggestBetterVoice: Bool = false
     let onClose: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @AppStorage("voiceQualityTipDismissed") private var tipDismissed = false
 
     private var mode: VoiceOrb.Mode {
         switch voice.state {
@@ -44,6 +47,7 @@ struct VoiceConversationView: View {
                 captions
                     .frame(maxHeight: 220)
                 Spacer(minLength: 0)
+                if suggestBetterVoice && !tipDismissed { voiceTip }
                 controls
                     .padding(.bottom, 24)
             }
@@ -127,6 +131,32 @@ struct VoiceConversationView: View {
         voice.state == .listening && !voice.partialTranscript.isEmpty
             ? voice.partialTranscript
             : voice.lastQuestion
+    }
+
+    /// One-time nudge to install a richer system voice. No deep-link — iOS has no
+    /// public URL to the Voices page — so it just points the way, and dismisses.
+    private var voiceTip: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "waveform.badge.plus")
+                .foregroundStyle(DS.brandLight)
+            Text("Want a more natural voice? Install one in **Settings ▸ Accessibility ▸ Spoken Content ▸ Voices**.")
+                .font(.footnote)
+                .foregroundStyle(.white.opacity(0.75))
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+            Button {
+                withAnimation { tipDismissed = true }
+            } label: {
+                Image(systemName: "xmark").font(.caption.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.6))
+            }
+            .accessibilityLabel("Dismiss voice tip")
+        }
+        .padding(12)
+        .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .padding(.horizontal, 4)
+        .padding(.bottom, 12)
+        .transition(.opacity)
     }
 
     private var controls: some View {

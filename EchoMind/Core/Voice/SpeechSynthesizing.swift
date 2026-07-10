@@ -66,6 +66,19 @@ final class SystemSpeechSynthesizer: NSObject, SpeechSynthesizing {
             ?? AVSpeechSynthesisVoice(language: lang)
     }
 
+    /// True when the device has only default-quality voices installed for the
+    /// language — the cue to nudge the user to install an enhanced/premium one.
+    /// Returns false when we can't tell (no matching voices) so we never nag wrongly.
+    static func onlyDefaultQualityAvailable(for locale: Locale = .current) -> Bool {
+        let lang = AVSpeechSynthesisVoice.currentLanguageCode()
+        let prefix = String((locale.language.languageCode?.identifier ?? lang).prefix(2)).lowercased()
+        let voices = AVSpeechSynthesisVoice.speechVoices().filter {
+            $0.language.lowercased().hasPrefix(prefix)
+        }
+        guard !voices.isEmpty else { return false }
+        return !voices.contains { $0.quality == .enhanced || $0.quality == .premium }
+    }
+
     func stop() {
         if synthesizer.isSpeaking {
             synthesizer.stopSpeaking(at: .immediate)
