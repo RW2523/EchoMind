@@ -18,6 +18,11 @@ final class VoiceSessionController {
 
     private(set) var state: State = .idle
     private(set) var partialTranscript = ""
+    /// The user's finished utterance for the current turn (for the caption UI).
+    private(set) var lastQuestion = ""
+    /// The assistant's answer text as it's spoken, accumulated sentence-by-sentence
+    /// (streaming) so the conversation view can caption what's being said.
+    private(set) var spokenText = ""
 
     private let input: any VoiceInput
     private let synthesizer: any SpeechSynthesizing
@@ -84,6 +89,7 @@ final class VoiceSessionController {
         partialTranscript = ""
         let trimmed = question.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { state = .idle; return }
+        lastQuestion = trimmed
 
         if let onQuestionStream {
             await speakStreaming(onQuestionStream(trimmed))
@@ -94,11 +100,14 @@ final class VoiceSessionController {
 
     private func speakOneShot(_ question: String) async {
         state = .thinking
+        lastQuestion = question
+        spokenText = ""
         let answer = await onQuestion(question)
         guard state == .thinking else { return }          // cancelled while thinking
         guard let answer, !answer.isEmpty else { state = .idle; return }
 
         state = .speaking
+        spokenText = answer
         await synthesizer.speak(answer)
         guard state == .speaking else { return }          // cancelled while speaking
         state = .idle
@@ -108,6 +117,7 @@ final class VoiceSessionController {
     /// sentences, and speak them sequentially as they complete.
     private func speakStreaming(_ stream: AsyncThrowingStream<String, Error>) async {
         state = .thinking
+        spokenText = ""
         let (sentences, continuation) = AsyncStream<String>.makeStream()
         sentenceContinuation = continuation
         answerTask = Task {
@@ -124,6 +134,7 @@ final class VoiceSessionController {
         for await sentence in sentences {
             if state == .thinking { state = .speaking }
             guard state == .speaking else { break }       // cancelled
+            spokenText += (spokenText.isEmpty ? "" : " ") + sentence   // caption
             await synthesizer.speak(sentence)
         }
         answerTask = nil
@@ -147,6 +158,8 @@ final class VoiceSessionController {
         let input = self.input
         Task { _ = await input.stop() }                   // best-effort STT teardown
         partialTranscript = ""
+        lastQuestion = ""
+        spokenText = ""
         state = .idle
     }
 
@@ -229,6 +242,7 @@ final class VoiceSessionController {
         guard handsFree else { return }
         endpointer.reset()
         partialTranscript = ""
+        spokenText = ""        // clear the prior answer's caption as a new turn opens
         do {
             let partials = try await input.start()
             state = .listening
@@ -271,6 +285,7 @@ final class VoiceSessionController {
             if handsFree { await beginListenTurn() } else { state = .idle }
             return
         }
+        lastQuestion = trimmed
         // Keep the mic open through the answer so the user can interrupt by voice.
         await startBargeMonitor()
         if let onQuestionStream {

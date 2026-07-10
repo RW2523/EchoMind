@@ -178,6 +178,42 @@ private final class QuestionSink {
         #expect(controller.state == .idle)
     }
 
+    @Test func captionsSurfaceQuestionAndStreamedAnswer() async {
+        let input = MockVoiceInput(final: "tell me a story")
+        let synth = MockSynthesizer()
+        let controller = VoiceSessionController(
+            input: input, synthesizer: synth,
+            onQuestion: { _ in nil },
+            onQuestionStream: { _ in
+                AsyncThrowingStream { continuation in
+                    continuation.yield("Once upon a time.")
+                    continuation.yield("Once upon a time. The end.")
+                    continuation.finish()
+                }
+            })
+
+        await controller.startListening()
+        await controller.finishAndAsk()
+
+        #expect(controller.lastQuestion == "tell me a story")
+        #expect(controller.spokenText == "Once upon a time. The end.")   // captions accumulate
+    }
+
+    @Test func cancelClearsCaptions() async {
+        let input = MockVoiceInput(final: "hello there")
+        let synth = MockSynthesizer()
+        let sink = QuestionSink(answer: "hi back")
+        let controller = VoiceSessionController(input: input, synthesizer: synth, onQuestion: sink.handle)
+
+        await controller.startListening()
+        await controller.finishAndAsk()
+        #expect(!controller.spokenText.isEmpty)
+
+        controller.cancel()
+        #expect(controller.spokenText.isEmpty)
+        #expect(controller.lastQuestion.isEmpty)
+    }
+
     @Test func bargeInDuringSpeakingStopsAndIdles() async {
         let input = MockVoiceInput(final: "question")
         let synth = MockSynthesizer(blockUntilStopped: true)

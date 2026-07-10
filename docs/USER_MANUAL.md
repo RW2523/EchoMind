@@ -65,10 +65,15 @@ tap. It also carries **memory** — context from every past meeting — so follo
 ("Who owns onboarding?"). Tap the suggested follow-up chips to dig deeper.
 
 **Ask by voice:**
-- Tap the **mic** to speak a question (push-to-talk); tap the check to finish. EchoMind
-  answers *and speaks the reply aloud*.
-- Tap the **waveform** button for **hands-free** conversation — it detects when you stop
-  talking, answers, and listens again. Tap **✋** (or just start talking) to interrupt.
+- Tap the **mic** to speak a single question (push-to-talk); tap the check to finish.
+  EchoMind answers *and speaks the reply aloud*.
+- Tap the **waveform** button to open **Voice mode** — a full-screen, hands-free
+  conversation. A glowing orb shows whether it's listening, thinking, or speaking; live
+  captions show both sides. Just talk — it detects when you stop, answers, and listens
+  again. **Tap anywhere (or the ✋) to interrupt.** Tap **✕** to end.
+- The voice sounds best on devices with an enhanced or premium system voice (installed
+  from *iOS Settings ▸ Accessibility ▸ Spoken Content ▸ Voices*). If the Kokoro voice
+  pack is installed and selected, EchoMind uses its warmer voice instead.
 
 ### Knowledge — import documents
 Import PDFs or text files with **+**. They become searchable in Ask alongside your meetings,

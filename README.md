@@ -10,7 +10,7 @@
 ![Platform](https://img.shields.io/badge/iOS-26-black?logo=apple)
 ![Swift](https://img.shields.io/badge/Swift-6-orange?logo=swift)
 ![UI](https://img.shields.io/badge/SwiftUI%20%2B%20SwiftData-blue)
-![Tests](https://img.shields.io/badge/tests-304%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-308%20passing-brightgreen)
 ![Network](https://img.shields.io/badge/network-zero-success)
 ![Privacy](https://img.shields.io/badge/data%20collected-none-success)
 
@@ -39,7 +39,8 @@ can ask questions by text or voice.
 - 🗂️ **Smart grouping** — meetings are clustered by concept and AI-labeled, so similar meetings organize themselves.
 - 🧠 **Total recall** — a durable cross-session memory of people, projects, and decisions, used to answer with context from *every* past meeting.
 - 🔗 **Report continuity** — new reports reference prior related meetings ("follow-up on last week's decision…").
-- 💬 **Ask anything** — chat with your meetings and documents (hybrid RAG), grounded with sources — by text **or voice** (push-to-talk, streaming, hands-free with barge-in).
+- 💬 **Ask anything** — chat with your meetings and documents (hybrid RAG), grounded with sources — by text or voice.
+- 🎧 **Voice mode** — a full-screen, hands-free conversation (ChatGPT/Grok-style): a living orb, live captions, tap-to-interrupt. Streams the reply sentence-by-sentence so it speaks instantly; upgrades to the warm Kokoro voice when that pack is installed.
 - ▶️ **Tap-to-play** — retained audio with a scrubber; tap any transcript line to jump there.
 - 📄 **Import** — PDFs and notes searchable alongside your meetings.
 - 🔒 **Private by design** — 100% on-device, no account, no tracking, **zero network calls** (enforced by a test). Export or delete everything anytime.
@@ -98,7 +99,7 @@ xcodebuild -scheme EchoMind -destination 'platform=iOS Simulator,name=iPhone 17 
   -only-testing:EchoMindTests -parallel-testing-enabled NO test
 ```
 
-**304 tests** cover the pure logic exhaustively — clustering (order-invariant), chunking,
+**308 tests** cover the pure logic exhaustively — clustering (order-invariant), chunking,
 token budgeting, memory distillation, RAG fusion, the voice state machine, and the
 zero-network audit. Anything touching mic/speech/on-device models is device-only.
 

@@ -16,14 +16,18 @@ protocol SpeechSynthesizing {
 
 /// AVSpeechSynthesizer implementation. Bridges the delegate's finish/cancel
 /// callbacks into async completion so the controller can `await` an utterance.
+/// Picks the best-sounding installed voice (premium ▸ enhanced ▸ default) so the
+/// day-one floor sounds as natural as the OS allows — no download, no package.
 @MainActor
 final class SystemSpeechSynthesizer: NSObject, SpeechSynthesizing {
     private let synthesizer = AVSpeechSynthesizer()
     private var continuation: CheckedContinuation<Void, Never>?
+    private let voice: AVSpeechSynthesisVoice?
 
     nonisolated var isAvailable: Bool { true }
 
-    override init() {
+    init(locale: Locale = .current) {
+        self.voice = Self.bestVoice(for: locale)
         super.init()
         synthesizer.delegate = self
     }
@@ -35,10 +39,31 @@ final class SystemSpeechSynthesizer: NSObject, SpeechSynthesizing {
         try? AVAudioSession.sharedInstance().setCategory(.playback, options: [.duckOthers])
         try? AVAudioSession.sharedInstance().setActive(true)
         let utterance = AVSpeechUtterance(string: trimmed)
+        if let voice { utterance.voice = voice }
+        // A hair slower than the raw default reads as conversational, not clipped.
+        utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 0.96
+        utterance.pitchMultiplier = 1.0
+        utterance.postUtteranceDelay = 0.05
         await withCheckedContinuation { continuation in
             self.continuation = continuation
             synthesizer.speak(utterance)
         }
+    }
+
+    /// Highest-quality installed voice for the locale's language: premium if the
+    /// user downloaded one (Settings ▸ Accessibility ▸ Spoken Content), else
+    /// enhanced, else whatever the language default is. Nil → OS default voice.
+    static func bestVoice(for locale: Locale) -> AVSpeechSynthesisVoice? {
+        let lang = AVSpeechSynthesisVoice.currentLanguageCode()
+        let prefix = String((locale.language.languageCode?.identifier ?? lang).prefix(2)).lowercased()
+        let voices = AVSpeechSynthesisVoice.speechVoices().filter {
+            $0.language.lowercased().hasPrefix(prefix)
+        }
+        func pick(_ q: AVSpeechSynthesisVoiceQuality) -> AVSpeechSynthesisVoice? {
+            voices.first { $0.quality == q }
+        }
+        return pick(.premium) ?? pick(.enhanced) ?? voices.first
+            ?? AVSpeechSynthesisVoice(language: lang)
     }
 
     func stop() {

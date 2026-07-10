@@ -76,6 +76,8 @@ private struct ScreenshotRouter: View {
             NavigationStack { SessionsView() }
         case "ask":
             NavigationStack { AskView() }
+        case "orb":
+            VoiceOrbGallery()
         case "report":
             NavigationStack {
                 Group {
@@ -91,6 +93,30 @@ private struct ScreenshotRouter: View {
             }
         default:
             MainTabView()
+        }
+    }
+}
+
+/// Static gallery of the voice orb in every state — for eyeballing the visual
+/// without a mic/device (screenshot route `--screen orb`).
+private struct VoiceOrbGallery: View {
+    private let modes: [(VoiceOrb.Mode, String)] = [
+        (.idle, "Idle"), (.listening, "Listening"), (.thinking, "Thinking"), (.speaking, "Speaking"),
+    ]
+    var body: some View {
+        ZStack {
+            LinearGradient(colors: [DS.bg, .black], startPoint: .top, endPoint: .bottom).ignoresSafeArea()
+            VStack(spacing: 20) {
+                ForEach(modes, id: \.1) { mode, name in
+                    HStack(spacing: 18) {
+                        VoiceOrb(mode: mode, level: mode == .listening ? 0.6 : 0)
+                            .frame(width: 110, height: 110)
+                        Text(name).font(.title3.weight(.semibold)).foregroundStyle(.white.opacity(0.8))
+                        Spacer()
+                    }
+                    .padding(.horizontal, 28)
+                }
+            }
         }
     }
 }

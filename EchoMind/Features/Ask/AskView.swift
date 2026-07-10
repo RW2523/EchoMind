@@ -5,6 +5,7 @@ struct AskView: View {
     @Environment(AppDependencies.self) private var dependencies
     @State private var model: AskViewModel?
     @State private var voice: VoiceSessionController?
+    @State private var showVoiceMode = false
 
     var body: some View {
         Group {
@@ -96,10 +97,17 @@ struct AskView: View {
                     .padding(.bottom, 4)
                 }
             }
-            if let voice, voice.isActive { voiceStrip(voice) }
+            // The inline strip covers push-to-talk (single spoken question). Hands-free
+            // is the full-screen conversation below.
+            if let voice, voice.isActive, !voice.isHandsFree { voiceStrip(voice) }
             inputBar(model)
         }
         .background(BrandBackground())
+        .fullScreenCover(isPresented: $showVoiceMode) {
+            if let voice {
+                VoiceConversationView(voice: voice) { showVoiceMode = false }
+            }
+        }
     }
 
     @ViewBuilder
@@ -160,10 +168,10 @@ struct AskView: View {
             .background(DS.bgElevated.opacity(0.5), in: Capsule())
             .overlay(Capsule().strokeBorder(DS.stroke.opacity(0.25), lineWidth: 1))
 
-            // Send, or hands-free when there's nothing to send.
+            // Send, or open the full-screen voice conversation when there's nothing to send.
             if let voice, voice.canSpeak, !voice.isActive, empty {
-                circleButton("waveform", label: "Hands-free conversation", disabled: model.state == .thinking) {
-                    Task { await voice.startConversation() }
+                circleButton("waveform", label: "Voice conversation", disabled: model.state == .thinking) {
+                    showVoiceMode = true
                 }
             } else {
                 circleButton("arrow.up", label: "Send question",
