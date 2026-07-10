@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Build & test (iOS Simulator)
+    # Xcode 26 / iOS 26 SDK ships on the macos-26 image. If GitHub renames the
+    # label, update it here — everything else is image-agnostic.
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select the newest Xcode 26
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          if [ -n "$XCODE" ]; then sudo xcode-select -s "$XCODE"; fi
+          xcodebuild -version
+
+      - name: Pick an available iPhone simulator
+        id: sim
+        run: |
+          # Prefer the project's default; otherwise take any available iPhone.
+          if xcrun simctl list devices available | grep -q "iPhone 17 Pro ("; then
+            NAME="iPhone 17 Pro"
+          else
+            NAME=$(xcrun simctl list devices available \
+              | grep -oE 'iPhone [A-Za-z0-9 ]+' | head -1 | sed 's/ *$//')
+          fi
+          echo "Using simulator: $NAME"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Build
+        run: |
+          set -o pipefail
+          xcodebuild -scheme EchoMind \
+            -destination "platform=iOS Simulator,name=${{ steps.sim.outputs.name }}" \
+            build
+
+      - name: Test (serial — CoreSimulator dislikes parallel here)
+        run: |
+          set -o pipefail
+          xcodebuild -scheme EchoMind \
+            -destination "platform=iOS Simulator,name=${{ steps.sim.outputs.name }}" \
+            -only-testing:EchoMindTests \
+            -parallel-testing-enabled NO \
+            test

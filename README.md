@@ -6,6 +6,7 @@
 
 **Record → transcribe → auto-report → ask.** All on-device. Nothing ever leaves your iPhone.
 
+[![CI](https://github.com/RW2523/EchoMind/actions/workflows/ci.yml/badge.svg)](https://github.com/RW2523/EchoMind/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/iOS-26-black?logo=apple)
 ![Swift](https://img.shields.io/badge/Swift-6-orange?logo=swift)
 ![UI](https://img.shields.io/badge/SwiftUI%20%2B%20SwiftData-blue)
@@ -133,4 +134,5 @@ Steps in [PACKAGES.md](PACKAGES.md).
 
 ## License
 
-© 2026 AJACE. All rights reserved. (Add a license file before any public release.)
+© 2026 AJACE. Source-available for personal evaluation and learning — no
+redistribution or commercial use without permission. See [LICENSE](LICENSE).

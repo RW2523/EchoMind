@@ -5,6 +5,7 @@ import SwiftUI
 /// no flash of the wrong screen at launch (§2.7).
 struct RootView: View {
     @Environment(AppDependencies.self) private var dependencies
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         Group {
@@ -27,6 +28,20 @@ struct RootView: View {
             }
         }
         .echoMindStyle()
+        // F4: full-screen gate while locked. Lock state is read synchronously at
+        // launch — no content flash. (A sheet that was up when the app backgrounded
+        // presents above this overlay; acceptable v1 trade-off.)
+        .overlay {
+            if dependencies.appLock.isLocked {
+                AppLockView(controller: dependencies.appLock)
+            }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            dependencies.appLock.handleScenePhase(phase)
+            if phase == .active, dependencies.appLock.isLocked {
+                Task { await dependencies.appLock.unlock() }
+            }
+        }
         .task {
             #if DEBUG
             if CommandLine.arguments.contains("--skip-onboarding") { dependencies.onboardingComplete = true }

@@ -16,6 +16,9 @@ final class SessionDetailViewModel {
     private(set) var summaryState: SummaryState = .none
     private(set) var isIdentifyingSpeakers = false
     private(set) var actionStates: [Bool] = []
+    /// F5: transient feedback under the "Add to Reminders" button.
+    private(set) var remindersMessage: String?
+    private(set) var isExportingReminders = false
     var draftTitle: String
 
     private let repository: any SessionRepository
@@ -24,6 +27,7 @@ final class SessionDetailViewModel {
     private let audioStore: AudioStore
     private let diarizer: any DiarizationService
     private let reportGenerator: (any ReportGenerating)?
+    private let reminders: (any ReminderExporting)?
     private var pendingWatcher: Task<Void, Never>?
 
     init(session: SessionSnapshot,
@@ -32,7 +36,8 @@ final class SessionDetailViewModel {
          availability: any AvailabilityProviding,
          audioStore: AudioStore = AudioStore(),
          diarizer: any DiarizationService = UnavailableDiarizationService(),
-         reportGenerator: (any ReportGenerating)? = nil) {
+         reportGenerator: (any ReportGenerating)? = nil,
+         reminders: (any ReminderExporting)? = nil) {
         self.session = session
         self.draftTitle = session.title
         self.repository = repository
@@ -41,6 +46,28 @@ final class SessionDetailViewModel {
         self.reportGenerator = reportGenerator
         self.audioStore = audioStore
         self.diarizer = diarizer
+        self.reminders = reminders
+    }
+
+    // MARK: - Reminders export (F5)
+
+    var canExportReminders: Bool { reminders != nil }
+
+    /// Send the report's action items to Apple Reminders (explicit user tap only).
+    func exportActionItemsToReminders() async {
+        guard let reminders, case .available(let summary) = summaryState else { return }
+        let drafts = ReminderDrafts.make(from: summary.actionItems, sessionTitle: session.title)
+        guard !drafts.isEmpty else { remindersMessage = "No action items to add."; return }
+        isExportingReminders = true
+        defer { isExportingReminders = false }
+        do {
+            let count = try await reminders.export(drafts)
+            remindersMessage = count == 1 ? "Added 1 reminder." : "Added \(count) reminders."
+        } catch ReminderExportError.accessDenied {
+            remindersMessage = "Allow Reminders access in iOS Settings ▸ EchoMind."
+        } catch {
+            remindersMessage = "Couldn't add reminders. Try again."
+        }
     }
 
     /// Whether "Identify speakers" should be offered: engine linked + audio on disk.

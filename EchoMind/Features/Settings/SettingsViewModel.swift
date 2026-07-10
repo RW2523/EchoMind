@@ -12,6 +12,7 @@ final class SettingsViewModel {
     var locales: [Locale] = []
     var preferredLocaleIdentifier: String
     var audioRetentionEnabled: Bool
+    var appLockEnabled: Bool
 
     let availability: any AvailabilityProviding
 
@@ -20,26 +21,53 @@ final class SettingsViewModel {
     private let wipeService: any DataWipeService
     private let indexer: any IndexerService
     private let settingsStore: AppSettingsStore
+    private let appLockAuthenticator: (any AppLockAuthenticating)?
 
     init(availability: any AvailabilityProviding,
          usageService: any StorageUsageService,
          exportService: any DataExportService,
          wipeService: any DataWipeService,
          indexer: any IndexerService,
-         settingsStore: AppSettingsStore) {
+         settingsStore: AppSettingsStore,
+         appLockAuthenticator: (any AppLockAuthenticating)? = nil) {
         self.availability = availability
         self.usageService = usageService
         self.exportService = exportService
         self.wipeService = wipeService
         self.indexer = indexer
         self.settingsStore = settingsStore
+        self.appLockAuthenticator = appLockAuthenticator
         self.preferredLocaleIdentifier = settingsStore.preferredLocale ?? Locale.current.identifier(.bcp47)
         self.audioRetentionEnabled = settingsStore.audioRetentionEnabled
+        self.appLockEnabled = settingsStore.appLockEnabled
     }
 
     func setAudioRetention(_ enabled: Bool) {
         audioRetentionEnabled = enabled
         settingsStore.setAudioRetentionEnabled(enabled)
+    }
+
+    // MARK: - App lock (F4)
+
+    var appLockAvailable: Bool { appLockAuthenticator?.isAvailable ?? false }
+    var appLockMethodName: String { appLockAuthenticator?.methodName ?? "Face ID" }
+
+    /// Enabling authenticates FIRST — proof the prompt works on this device before
+    /// the app starts gating on it. Disabling is immediate (the app is already open,
+    /// i.e. already authenticated).
+    func setAppLock(_ enabled: Bool) async {
+        guard enabled else {
+            appLockEnabled = false
+            settingsStore.setAppLockEnabled(false)
+            return
+        }
+        guard let appLockAuthenticator,
+              await appLockAuthenticator.authenticate(reason: "Confirm to require \(appLockMethodName) for EchoMind") else {
+            appLockEnabled = false   // revert the toggle; setting stays off
+            return
+        }
+        appLockEnabled = true
+        settingsStore.setAppLockEnabled(true)
     }
 
     func load() async {

@@ -23,6 +23,7 @@ final class AppSettingsStore {
     var embeddingDimension: Int? { settings().embeddingDimension }
     var lastIndexRebuild: Date? { settings().lastIndexRebuild }
     var audioRetentionEnabled: Bool { settings().audioRetentionEnabled }
+    var appLockEnabled: Bool { settings().appLockEnabled }
 
     func setOnboardingComplete(_ value: Bool) { mutate { $0.onboardingComplete = value } }
     func setConsentAcknowledged(_ value: Bool) { mutate { $0.consentAcknowledged = value } }
@@ -30,6 +31,7 @@ final class AppSettingsStore {
     func setEmbeddingDimension(_ value: Int?) { mutate { $0.embeddingDimension = value } }
     func setLastIndexRebuild(_ value: Date?) { mutate { $0.lastIndexRebuild = value } }
     func setAudioRetentionEnabled(_ value: Bool) { mutate { $0.audioRetentionEnabled = value } }
+    func setAppLockEnabled(_ value: Bool) { mutate { $0.appLockEnabled = value } }
 
     // MARK: - Single-row fetch-or-create
 

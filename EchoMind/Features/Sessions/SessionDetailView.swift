@@ -23,7 +23,8 @@ struct SessionDetailView: View {
                     availability: dependencies.availabilityMonitor,
                     audioStore: dependencies.audioStore,
                     diarizer: dependencies.diarizer,
-                    reportGenerator: dependencies.reportGenerator)
+                    reportGenerator: dependencies.reportGenerator,
+                    reminders: dependencies.reminderExporter)
                 model = vm
                 await vm.load()
             }

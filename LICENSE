@@ -1,0 +1,27 @@
+EchoMind Source-Available License
+
+Copyright (c) 2026 AJACE. All rights reserved.
+
+Permission is granted to view, clone, and build this source code for
+personal, non-commercial evaluation and educational purposes only.
+
+The following are NOT permitted without prior written permission from the
+copyright holder:
+
+1. Redistribution of this software or derivative works, in source or
+   binary form, including publishing the app or a derivative to any app
+   store or package registry.
+2. Commercial use of this software or any substantial portion of it.
+3. Removing or altering copyright notices.
+
+Contributions: by submitting a contribution (pull request, patch, or
+suggestion), you agree that the copyright holder may use, modify, and
+relicense it as part of this project.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF
+OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
