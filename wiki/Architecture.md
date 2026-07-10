@@ -1,4 +1,4 @@
-# EchoMind — Architecture
+# Architecture
 
 A developer's map of how EchoMind is built. Principles: **one protocol per service**,
 **one routed gateway for all AI**, **one `#if canImport` file per optional package**,
@@ -14,6 +14,8 @@ Core/Transcription  SpeechAnalyzerTranscriber behind TranscriptionService
 Core/AI         Gateways, budgeter, summarizer, report/classify/memory/continuity pipelines
 Core/RAG        chunking, embeddings, vector search, BM25, RRF, MMR, RAGPipeline, clustering
 Core/Voice      VoiceSessionController + STT/TTS/VAD/streaming seams
+Core/Security   AppLockAuthenticating (LocalAuthentication) — Face ID app lock
+Core/Integrations  ReminderExporting (EventKit) — action items → Apple Reminders
 Core/Storage    SwiftData @Model + @ModelActor repositories; SchemaV1
 Core/Design     DesignSystem (dark navy theme, components, effects)
 Models/         pure Sendable value types (snapshots) that cross actor boundaries
@@ -79,6 +81,8 @@ Triggered after each recording stops, in `ReportPipeline`:
 
 1. **Summarize** (map-reduce) → `MeetingSummary` (overview, decisions, action items, risks,
    questions); persisted; report state `pending → ready`.
+   Then **auto-title** (F3): `MeetingTitler` names the session from the overview —
+   applied via an atomic `renameIfPlaceholder`, so a user rename always wins.
 2. **Continuity** — `MeetingContinuityService` finds the most similar *earlier* sessions by
    session-vector cosine and asks how this meeting continues them.
 3. **Grouping** — `SessionClusterer` (pure, order-invariant, embedding-based) clusters
@@ -120,7 +124,7 @@ floor, so the app compiles and ships with **zero** packages:
   device needed.
 - `NetworkAuditTests` proves zero network calls (the privacy guarantee).
 - Device-only surfaces (mic, real speech, on-device model quality, thermals) are validated
-  via [AppStore/DEVICE_TEST_CHECKLIST.md](https://github.com/RW2523/EchoMind/blob/main/AppStore/DEVICE_TEST_CHECKLIST.md).
+  via [DEVICE_TEST_CHECKLIST.md](https://github.com/RW2523/EchoMind/blob/main/AppStore/DEVICE_TEST_CHECKLIST.md).
 
 ## Conventions
 

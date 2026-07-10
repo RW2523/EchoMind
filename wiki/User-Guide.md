@@ -1,4 +1,4 @@
-# EchoMind — User Manual
+# User Guide
 
 Everything EchoMind does, and how to use it. EchoMind is **100% on-device** — your
 recordings, transcripts, and notes never leave your iPhone.
@@ -28,14 +28,18 @@ button, quick actions, and your recent sessions.
 3. Tap **Stop**.
 
 The moment you stop, EchoMind **automatically generates a report** in the background —
-no button needed.
+no button needed. The session also **names itself** from what was discussed (e.g.
+"Q3 Launch Planning" instead of "Meeting Jul 9"); rename it anytime — your name
+always wins and is never overwritten.
 
 ### Reports (auto)
 Open a session (Sessions tab or Home ▸ Recent) to see its report:
 - **Overview** — a few sentences on what the meeting covered.
 - **Continuing from earlier meetings** — links to prior related meetings, when relevant.
 - **Key Decisions**, **Risks**, **Open Questions**.
-- **Action Items** — tap the circle to check one off; your checkmarks are saved.
+- **Action Items** — tap the circle to check one off; your checkmarks are saved
+  (and survive regenerating the report). Tap **Add to Reminders** to send them to
+  Apple Reminders, with the owner and source meeting in the notes.
 - If Apple Intelligence isn't available, transcription still works and you can generate the
   report later with one tap.
 
@@ -61,10 +65,15 @@ tap. It also carries **memory** — context from every past meeting — so follo
 ("Who owns onboarding?"). Tap the suggested follow-up chips to dig deeper.
 
 **Ask by voice:**
-- Tap the **mic** to speak a question (push-to-talk); tap the check to finish. EchoMind
-  answers *and speaks the reply aloud*.
-- Tap the **waveform** button for **hands-free** conversation — it detects when you stop
-  talking, answers, and listens again. Tap **✋** (or just start talking) to interrupt.
+- Tap the **mic** to speak a single question (push-to-talk); tap the check to finish.
+  EchoMind answers *and speaks the reply aloud*.
+- Tap the **waveform** button to open **Voice mode** — a full-screen, hands-free
+  conversation. A glowing orb shows whether it's listening, thinking, or speaking; live
+  captions show both sides. Just talk — it detects when you stop, answers, and listens
+  again. **Tap anywhere (or the ✋) to interrupt.** Tap **✕** to end.
+- The voice sounds best on devices with an enhanced or premium system voice (installed
+  from *iOS Settings ▸ Accessibility ▸ Spoken Content ▸ Voices*). If the Kokoro voice
+  pack is installed and selected, EchoMind uses its warmer voice instead.
 
 ### Knowledge — import documents
 Import PDFs or text files with **+**. They become searchable in Ask alongside your meetings,
@@ -78,9 +87,12 @@ with sources pointing to the document and page.
   with its type; swipe to **forget** any fact.
 - **Transcription Language** — pick your language / install its speech model.
 - **Recording Audio** — toggle keeping audio recordings.
+- **Privacy & Security** — **Require Face ID**: lock EchoMind whenever you leave it;
+  unlock with Face ID / Touch ID (passcode fallback).
 - **Storage** — how much space sessions, documents, index, and audio use.
-- **Your Data** — **Export All Data** (Markdown per session) or **Delete All Data**
-  (removes everything, including memory and audio).
+- **Your Data** — **Export All Data** (Markdown per session, plus each session's
+  audio recording) or **Delete All Data** (removes everything, including memory
+  and audio).
 - **About EchoMind** — version and privacy details.
 
 ## Privacy in practice
@@ -88,7 +100,7 @@ with sources pointing to the document and page.
 - Nothing is uploaded — EchoMind makes no network requests.
 - No account, no sign-in, no analytics.
 - Everything is stored encrypted on-device and can be exported or deleted anytime.
-- Full policy: [../AppStore/PRIVACY_POLICY.md](https://github.com/RW2523/EchoMind/blob/main/AppStore/PRIVACY_POLICY.md).
+- Full policy: [PRIVACY_POLICY.md](https://github.com/RW2523/EchoMind/blob/main/AppStore/PRIVACY_POLICY.md).
 
 ## Troubleshooting
 
