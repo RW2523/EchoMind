@@ -28,14 +28,18 @@ button, quick actions, and your recent sessions.
 3. Tap **Stop**.
 
 The moment you stop, EchoMind **automatically generates a report** in the background —
-no button needed.
+no button needed. The session also **names itself** from what was discussed (e.g.
+"Q3 Launch Planning" instead of "Meeting Jul 9"); rename it anytime — your name
+always wins and is never overwritten.
 
 ### Reports (auto)
 Open a session (Sessions tab or Home ▸ Recent) to see its report:
 - **Overview** — a few sentences on what the meeting covered.
 - **Continuing from earlier meetings** — links to prior related meetings, when relevant.
 - **Key Decisions**, **Risks**, **Open Questions**.
-- **Action Items** — tap the circle to check one off; your checkmarks are saved.
+- **Action Items** — tap the circle to check one off; your checkmarks are saved
+  (and survive regenerating the report). Tap **Add to Reminders** to send them to
+  Apple Reminders, with the owner and source meeting in the notes.
 - If Apple Intelligence isn't available, transcription still works and you can generate the
   report later with one tap.
 
@@ -78,9 +82,12 @@ with sources pointing to the document and page.
   with its type; swipe to **forget** any fact.
 - **Transcription Language** — pick your language / install its speech model.
 - **Recording Audio** — toggle keeping audio recordings.
+- **Privacy & Security** — **Require Face ID**: lock EchoMind whenever you leave it;
+  unlock with Face ID / Touch ID (passcode fallback).
 - **Storage** — how much space sessions, documents, index, and audio use.
-- **Your Data** — **Export All Data** (Markdown per session) or **Delete All Data**
-  (removes everything, including memory and audio).
+- **Your Data** — **Export All Data** (Markdown per session, plus each session's
+  audio recording) or **Delete All Data** (removes everything, including memory
+  and audio).
 - **About EchoMind** — version and privacy details.
 
 ## Privacy in practice

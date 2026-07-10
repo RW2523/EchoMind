@@ -6,10 +6,11 @@
 
 **Record → transcribe → auto-report → ask.** All on-device. Nothing ever leaves your iPhone.
 
+[![CI](https://github.com/RW2523/EchoMind/actions/workflows/ci.yml/badge.svg)](https://github.com/RW2523/EchoMind/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/iOS-26-black?logo=apple)
 ![Swift](https://img.shields.io/badge/Swift-6-orange?logo=swift)
 ![UI](https://img.shields.io/badge/SwiftUI%20%2B%20SwiftData-blue)
-![Tests](https://img.shields.io/badge/tests-274%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-299%20passing-brightgreen)
 ![Network](https://img.shields.io/badge/network-zero-success)
 ![Privacy](https://img.shields.io/badge/data%20collected-none-success)
 
@@ -32,7 +33,9 @@ can ask questions by text or voice.
 ## Features
 
 - 🎙️ **Live transcription** — on-device speech-to-text (SpeechAnalyzer), keeps recording while the screen is locked.
-- 📝 **Auto reports** — summary, key decisions, and check-off action items generated automatically when you stop.
+- 📝 **Auto reports** — summary, key decisions, and check-off action items generated automatically when you stop — and the session **names itself** from what was discussed.
+- ✅ **Reminders export** — send a report's action items to Apple Reminders with one tap.
+- 🔐 **App lock** — optional Face ID / Touch ID gate on opening the app.
 - 🗂️ **Smart grouping** — meetings are clustered by concept and AI-labeled, so similar meetings organize themselves.
 - 🧠 **Total recall** — a durable cross-session memory of people, projects, and decisions, used to answer with context from *every* past meeting.
 - 🔗 **Report continuity** — new reports reference prior related meetings ("follow-up on last week's decision…").
@@ -95,7 +98,7 @@ xcodebuild -scheme EchoMind -destination 'platform=iOS Simulator,name=iPhone 17 
   -only-testing:EchoMindTests -parallel-testing-enabled NO test
 ```
 
-**274 tests** cover the pure logic exhaustively — clustering (order-invariant), chunking,
+**299 tests** cover the pure logic exhaustively — clustering (order-invariant), chunking,
 token budgeting, memory distillation, RAG fusion, the voice state machine, and the
 zero-network audit. Anything touching mic/speech/on-device models is device-only.
 
@@ -133,4 +136,5 @@ Steps in [PACKAGES.md](PACKAGES.md).
 
 ## License
 
-© 2026 AJACE. All rights reserved. (Add a license file before any public release.)
+© 2026 AJACE. Source-available for personal evaluation and learning — no
+redistribution or commercial use without permission. See [LICENSE](LICENSE).

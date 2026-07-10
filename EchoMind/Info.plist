@@ -9,5 +9,11 @@
 	<!-- Standard OS encryption only (HTTPS/keychain) → export-exempt. -->
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<!-- F4: optional app lock. -->
+	<key>NSFaceIDUsageDescription</key>
+	<string>EchoMind uses Face ID to unlock the app when you turn on the app lock in Settings.</string>
+	<!-- F5: optional action-item export, only when you tap "Add to Reminders". -->
+	<key>NSRemindersFullAccessUsageDescription</key>
+	<string>EchoMind adds your meeting action items to Reminders only when you ask it to. Nothing is read or synced in the background.</string>
 </dict>
 </plist>

@@ -64,6 +64,14 @@ final class AppDependencies {
         return InMemoryVectorStore()
     }()
 
+    /// F4: Face ID app lock — authenticator seam + observable lock state.
+    let appLockAuthenticator: any AppLockAuthenticating
+    let appLock: AppLockController
+    /// F5: action items → Apple Reminders (explicit user tap only).
+    let reminderExporter: any ReminderExporting = EventKitReminderExporter()
+    /// F3: names sessions from their reports (shared by the pipeline + manual path).
+    let sessionTitler: any SessionTitling
+
     /// Mirrors `settingsStore.onboardingComplete` but observable, so flipping it
     /// on completion re-renders `RootView` without an async flash (§2.7).
     var onboardingComplete: Bool
@@ -152,10 +160,13 @@ final class AppDependencies {
         let distiller = MemoryDistiller(gateway: routing, store: memoryStore)
         let continuity = MeetingContinuityService(
             sessions: sessionRepo, chunks: chunkRepo, embedder: embedder, gateway: routing)
+        let titler = MeetingTitler(gateway: routing)
+        self.sessionTitler = titler
         let report = ReportPipeline(
             sessions: sessionRepo, summarizer: summarizer,
             availability: { await MainActor.run { monitor.status } },
-            grouping: grouping, distiller: distiller, continuity: continuity)
+            grouping: grouping, distiller: distiller, continuity: continuity,
+            titler: titler)
         self.reportGenerator = report
         self.reportReconciler = ReportReconciler(
             sessions: sessionRepo, reportGenerator: report,
@@ -168,6 +179,10 @@ final class AppDependencies {
         let store = AppSettingsStore(container: container)
         self.settingsStore = store
         self.onboardingComplete = store.onboardingComplete
+        let authenticator = BiometricAppLock()
+        self.appLockAuthenticator = authenticator
+        self.appLock = AppLockController(authenticator: authenticator,
+                                         isEnabled: { store.appLockEnabled })
     }
 
     /// Call after a successful index rebuild: records the current embedder as the

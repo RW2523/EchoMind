@@ -27,7 +27,8 @@ struct SettingsView: View {
                     exportService: dependencies.dataExportService,
                     wipeService: dependencies.dataWipeService,
                     indexer: dependencies.indexer,
-                    settingsStore: dependencies.settingsStore)
+                    settingsStore: dependencies.settingsStore,
+                    appLockAuthenticator: dependencies.appLockAuthenticator)
                 model = vm
                 await vm.load()
             } else {
@@ -84,6 +85,19 @@ struct SettingsView: View {
                 Text("Recording Audio")
             } footer: {
                 Text("Save each session's audio on-device so you can play it back and tap a line to jump there. Turning this off doesn't delete audio you've already kept.")
+            }
+
+            Section {
+                Toggle("Require \(model.appLockMethodName)", isOn: Binding(
+                    get: { model.appLockEnabled },
+                    set: { newValue in Task { await model.setAppLock(newValue) } }))
+                    .disabled(!model.appLockAvailable)
+            } header: {
+                Text("Privacy & Security")
+            } footer: {
+                Text(model.appLockAvailable
+                     ? "Lock EchoMind whenever you leave it. Unlocking uses \(model.appLockMethodName) with your passcode as a fallback."
+                     : "Set a device passcode to enable the app lock.")
             }
 
             Section("Storage") {

@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Build & test (iOS Simulator)
+    # Xcode 26 / iOS 26 SDK ships on the macos-26 image. If GitHub renames the
+    # label, update it here — everything else is image-agnostic.
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select the newest Xcode 26
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          if [ -n "$XCODE" ]; then sudo xcode-select -s "$XCODE"; fi
+          xcodebuild -version
+          # The project needs the iOS 26 SDK — fail loudly rather than producing
+          # confusing compile errors on an older toolchain.
+          MAJOR=$(xcodebuild -version | awk 'NR==1 {split($2, v, "."); print v[1]}')
+          if [ "${MAJOR:-0}" -lt 26 ]; then
+            echo "::error::Xcode 26+ required, found $(xcodebuild -version | head -1)"
+            exit 1
+          fi
+
+      - name: Pick an available iPhone simulator
+        id: sim
+        run: |
+          # JSON + python: robust against device names containing parentheses
+          # (e.g. "iPhone SE (3rd generation)"), which naive grep/sed parsing breaks on.
+          NAME=$(xcrun simctl list -j devices available | python3 -c '
+          import json, sys
+          data = json.load(sys.stdin)["devices"]
+          names = [d["name"] for devs in data.values() for d in devs
+                   if d["name"].startswith("iPhone")]
+          print("iPhone 17 Pro" if "iPhone 17 Pro" in names else (names[0] if names else ""))
+          ')
+          if [ -z "$NAME" ]; then
+            echo "::error::No available iPhone simulator on this runner"
+            xcrun simctl list devices available
+            exit 1
+          fi
+          echo "Using simulator: $NAME"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Build
+        run: |
+          set -o pipefail
+          xcodebuild -scheme EchoMind \
+            -destination "platform=iOS Simulator,name=${{ steps.sim.outputs.name }}" \
+            build
+
+      - name: Test (serial — CoreSimulator dislikes parallel here)
+        run: |
+          set -o pipefail
+          xcodebuild -scheme EchoMind \
+            -destination "platform=iOS Simulator,name=${{ steps.sim.outputs.name }}" \
+            -only-testing:EchoMindTests \
+            -parallel-testing-enabled NO \
+            test

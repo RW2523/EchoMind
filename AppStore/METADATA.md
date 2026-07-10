@@ -72,7 +72,10 @@ still work and the app clearly explains that AI summaries need Apple Intelligenc
 
 Permissions: Microphone and Speech Recognition are core to the app (recording and
 on-device transcription). Background audio mode keeps recording alive if the screen
-locks during a meeting.
+locks during a meeting. Two optional permissions appear only if the user invokes the
+feature: Face ID (Settings ▸ "Require Face ID" app lock) and Reminders (tapping
+"Add to Reminders" on a report writes the report's action items to Apple Reminders;
+the app never reads reminders).
 
 To test AI without recording a meeting: open the **Ask** tab and ask a question — a
 sample handbook is available so grounded answers work immediately. Or tap **Start

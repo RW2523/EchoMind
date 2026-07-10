@@ -19,6 +19,8 @@ nonisolated struct ReportPipeline: ReportGenerating {
     var distiller: (any MemoryDistilling)?
     /// R3+: continuity notes referencing prior related meetings. Optional.
     var continuity: (any ContinuityProviding)?
+    /// F3: replace the date placeholder with a descriptive AI title. Optional.
+    var titler: (any SessionTitling)?
 
     func generateReport(sessionId: UUID) async {
         // Tier B: no generator — record it and leave the manual path for later.
@@ -42,6 +44,17 @@ nonisolated struct ReportPipeline: ReportGenerating {
             let summary = try await summarizer.summarize(segments: texts) { _ in }
             let json = String(decoding: try JSONEncoder().encode(summary), as: UTF8.self)
             try await sessions.setReport(summaryJSON: json, sessionId: sessionId)
+            // F3: name the session from its report — but only while it still has the
+            // recording-time placeholder; a user's rename is never overwritten. The
+            // pre-check just skips the LLM call; the placeholder condition is enforced
+            // atomically inside the repository (renameIfPlaceholder), so a rename the
+            // user saves *during* title generation also wins.
+            if let titler,
+               let snapshot = try? await sessions.fetchSession(id: sessionId),
+               SessionNaming.isPlaceholder(snapshot.title, createdAt: snapshot.createdAt),
+               let title = await titler.title(overview: summary.overview, decisions: summary.keyDecisions) {
+                _ = try? await sessions.renameIfPlaceholder(sessionID: sessionId, to: title)
+            }
             // R3+: link this report to prior related meetings.
             if let continuity {
                 let notes = await continuity.continuityNotes(for: sessionId, overview: summary.overview)

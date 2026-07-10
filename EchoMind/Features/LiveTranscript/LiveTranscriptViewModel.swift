@@ -294,14 +294,7 @@ final class LiveTranscriptViewModel {
         }
         guard let sessionId, let startedAt else { return }
         try? await sessions.update(
-            SessionSnapshot(id: sessionId, title: Self.defaultTitle(startedAt),
+            SessionSnapshot(id: sessionId, title: SessionNaming.defaultTitle(startedAt),
                             createdAt: startedAt, updatedAt: Date(), duration: elapsed, origin: .live))
-    }
-
-    static func defaultTitle(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        return "Meeting \(formatter.string(from: date))"
     }
 }

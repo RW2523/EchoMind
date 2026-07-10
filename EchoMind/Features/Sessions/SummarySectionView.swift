@@ -74,6 +74,21 @@ struct SummarySectionView: View {
                     .buttonStyle(.plain)
                     .animation(DS.bouncy, value: done)
                 }
+                if model.canExportReminders {
+                    Button {
+                        Task { await model.exportActionItemsToReminders() }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Label("Add to Reminders", systemImage: "checklist")
+                                .font(.subheadline)
+                            if model.isExportingReminders { ProgressView().controlSize(.small) }
+                        }
+                    }
+                    .disabled(model.isExportingReminders)
+                    if let message = model.remindersMessage {
+                        Text(message).font(.caption).foregroundStyle(.secondary)
+                    }
+                }
             }
         }
         group("Risks", summary.risks)

@@ -11,6 +11,22 @@ private struct MockSummarizer: SummarizerService {
     }
 }
 
+private struct MockTitler: SessionTitling {
+    let result: String?
+    func title(overview: String, decisions: [String]) async -> String? { result }
+}
+
+/// Titler that runs a side effect while "generating" — used to interleave a user
+/// rename inside the titling window (the TOCTOU race).
+private struct HookedTitler: SessionTitling {
+    let result: String?
+    let whileGenerating: @Sendable () async -> Void
+    func title(overview: String, decisions: [String]) async -> String? {
+        await whileGenerating()
+        return result
+    }
+}
+
 @Suite struct ReportPipelineTests {
     private func seededRepo() async throws -> (SwiftDataSessionRepository, UUID) {
         let container = try ModelContainerFactory.inMemory()
@@ -36,6 +52,79 @@ private struct MockSummarizer: SummarizerService {
         #expect(fresh?.summaryJSON != nil)
         let decoded = try JSONDecoder().decode(MeetingSummary.self, from: Data((fresh?.summaryJSON ?? "").utf8))
         #expect(decoded.keyDecisions == ["Ship Friday"])
+    }
+
+    @Test func autoTitlesPlaceholderSession() async throws {
+        let container = try ModelContainerFactory.inMemory()
+        let repo = SwiftDataSessionRepository(modelContainer: container)
+        let id = UUID()
+        let created = Date(timeIntervalSince1970: 1_700_000_000)
+        try await repo.create(SessionSnapshot(id: id, title: SessionNaming.defaultTitle(created),
+                                              createdAt: created))
+        try await repo.appendSegment(
+            SegmentSnapshot(sessionId: id, text: "we planned the q3 launch", startTime: 0, endTime: 5),
+            toSession: id)
+
+        let pipeline = ReportPipeline(
+            sessions: repo, summarizer: MockSummarizer(summary: MeetingSummary(overview: "Q3 launch planning")),
+            availability: { .tierA }, titler: MockTitler(result: "Q3 Launch Planning"))
+        await pipeline.generateReport(sessionId: id)
+
+        #expect(try await repo.fetchSession(id: id)?.title == "Q3 Launch Planning")
+    }
+
+    @Test func neverRenamesUserTitledSession() async throws {
+        let (repo, id) = try await seededRepo()   // titled "Standup" by the user
+        let pipeline = ReportPipeline(
+            sessions: repo, summarizer: MockSummarizer(summary: MeetingSummary(overview: "Daily standup")),
+            availability: { .tierA }, titler: MockTitler(result: "Engineering Standup"))
+        await pipeline.generateReport(sessionId: id)
+
+        #expect(try await repo.fetchSession(id: id)?.title == "Standup")
+    }
+
+    @Test func userRenameDuringTitleGenerationWins() async throws {
+        // TOCTOU race: the placeholder check passes, then the user renames while the
+        // titler's LLM call is in flight. The atomic renameIfPlaceholder must refuse
+        // to overwrite the user's title.
+        let container = try ModelContainerFactory.inMemory()
+        let repo = SwiftDataSessionRepository(modelContainer: container)
+        let id = UUID()
+        let created = Date(timeIntervalSince1970: 1_700_000_000)
+        try await repo.create(SessionSnapshot(id: id, title: SessionNaming.defaultTitle(created),
+                                              createdAt: created))
+        try await repo.appendSegment(
+            SegmentSnapshot(sessionId: id, text: "board sync notes", startTime: 0, endTime: 5),
+            toSession: id)
+
+        let titler = HookedTitler(result: "AI Generated Title") {
+            // User saves a rename mid-generation.
+            try? await repo.rename(sessionID: id, to: "Board sync — keep")
+        }
+        let pipeline = ReportPipeline(
+            sessions: repo, summarizer: MockSummarizer(summary: MeetingSummary(overview: "Board sync")),
+            availability: { .tierA }, titler: titler)
+        await pipeline.generateReport(sessionId: id)
+
+        #expect(try await repo.fetchSession(id: id)?.title == "Board sync — keep")
+    }
+
+    @Test func nilTitleKeepsPlaceholder() async throws {
+        let container = try ModelContainerFactory.inMemory()
+        let repo = SwiftDataSessionRepository(modelContainer: container)
+        let id = UUID()
+        let created = Date(timeIntervalSince1970: 1_700_000_000)
+        let placeholder = SessionNaming.defaultTitle(created)
+        try await repo.create(SessionSnapshot(id: id, title: placeholder, createdAt: created))
+        try await repo.appendSegment(
+            SegmentSnapshot(sessionId: id, text: "hello", startTime: 0, endTime: 1), toSession: id)
+
+        let pipeline = ReportPipeline(
+            sessions: repo, summarizer: MockSummarizer(summary: MeetingSummary(overview: "x")),
+            availability: { .tierA }, titler: MockTitler(result: nil))
+        await pipeline.generateReport(sessionId: id)
+
+        #expect(try await repo.fetchSession(id: id)?.title == placeholder)
     }
 
     @Test func tierBMarksUnavailableWithoutSummarizing() async throws {
