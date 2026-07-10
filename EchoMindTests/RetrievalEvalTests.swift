@@ -7,6 +7,7 @@ import Foundation
     /// handbook chunks must land in top-3 for most queries. If this drops, that's
     /// the signal to invest in a MiniLM Core ML embedding (V2 §B1).
     @Test func handbookRetrievalMeetsThreshold() async throws {
+        guard await EmbeddingTestSupport.modelAvailable() else { return }   // no asset on CI
         let eval = RetrievalEval(embedder: NLEmbeddingService(), search: VectorSearch())
         let suite = RetrievalEval.handbookSuite()
         #expect(!suite.chunks.isEmpty)
@@ -21,6 +22,7 @@ import Foundation
     /// proven deterministically in MMRRerankerTests; here we prove it's safe on real
     /// embeddings before shipping it in the pipeline.)
     @Test func mmrRerankDoesNotRegressHandbookRecall() async throws {
+        guard await EmbeddingTestSupport.modelAvailable() else { return }   // no asset on CI
         let eval = RetrievalEval(embedder: NLEmbeddingService(), search: VectorSearch())
         let suite = RetrievalEval.handbookSuite()
         let plain = try await eval.score(chunks: suite.chunks, cases: suite.cases, k: 3)

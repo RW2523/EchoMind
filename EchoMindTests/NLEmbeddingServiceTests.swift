@@ -8,6 +8,7 @@ import Foundation
     }
 
     @Test func producesNormalizedVectorsOfModelDimension() async throws {
+        guard await EmbeddingTestSupport.modelAvailable() else { return }   // no asset on CI
         let service = NLEmbeddingService()
         let dimension = try await service.dimension
         #expect(dimension > 0)
@@ -21,6 +22,7 @@ import Foundation
     }
 
     @Test func semanticallySimilarTextsScoreHigher() async throws {
+        guard await EmbeddingTestSupport.modelAvailable() else { return }   // no asset on CI
         let service = NLEmbeddingService()
         let vectors = try await service.embed([
             "The refund policy allows returns within thirty days of purchase.",

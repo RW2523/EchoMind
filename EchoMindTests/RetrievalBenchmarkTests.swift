@@ -41,6 +41,7 @@ import Foundation
     // MARK: - End-to-end over the handbook (real NLEmbedding + hybrid pipeline)
 
     @Test func handbookBenchmarkMeetsRecallGate() async throws {
+        guard await EmbeddingTestSupport.modelAvailable() else { return }   // no asset on CI
         let report = try #require(
             await RetrievalBenchmarkRunner.handbook(embedder: NLEmbeddingService()))
 
@@ -58,6 +59,7 @@ import Foundation
     }
 
     @Test func unlabeledCasesAreFlaggedAndExcluded() async throws {
+        guard await EmbeddingTestSupport.modelAvailable() else { return }   // no asset on CI
         let corpus = [
             RetrievalBenchmark.Doc(text: "The refund window is 30 days from purchase."),
             RetrievalBenchmark.Doc(text: "Support is available Monday to Friday."),
