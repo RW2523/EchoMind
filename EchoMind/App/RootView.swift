@@ -39,7 +39,9 @@ struct RootView: View {
         .onChange(of: scenePhase) { _, phase in
             dependencies.appLock.handleScenePhase(phase)
             if phase == .active, dependencies.appLock.isLocked {
-                Task { await dependencies.appLock.unlock() }
+                // One automatic prompt per lock cycle — a cancelled prompt does NOT
+                // loop; the lock screen's button is the retry path.
+                Task { await dependencies.appLock.autoUnlockIfNeeded() }
             }
         }
         .task {

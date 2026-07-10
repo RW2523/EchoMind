@@ -14,6 +14,9 @@ final class AppLockController {
     /// True while the system prompt is up — guards double prompts when both the
     /// scene-phase change and the lock screen's auto-attempt fire.
     private var authenticating = false
+    /// Whether the automatic prompt already ran for the current lock cycle
+    /// (reset on re-lock). Prevents a cancel → re-prompt loop.
+    private var autoPrompted = false
 
     private let authenticator: any AppLockAuthenticating
     private let isEnabled: () -> Bool
@@ -21,20 +24,36 @@ final class AppLockController {
     init(authenticator: any AppLockAuthenticating, isEnabled: @escaping () -> Bool) {
         self.authenticator = authenticator
         self.isEnabled = isEnabled
-        self.isLocked = isEnabled()
+        // Fail OPEN if the device can no longer authenticate (passcode removed after
+        // enabling the lock): a lock nobody can pass would brick the app — Settings,
+        // the only place to turn the lock off, lives behind it.
+        self.isLocked = isEnabled() && authenticator.isAvailable
     }
 
     var methodName: String { authenticator.methodName }
 
     func handleScenePhase(_ phase: ScenePhase) {
-        guard isEnabled() else { isLocked = false; return }
-        if phase == .background { isLocked = true }
+        guard isEnabled(), authenticator.isAvailable else { isLocked = false; return }
+        if phase == .background {
+            isLocked = true
+            autoPrompted = false   // next foreground gets one automatic prompt
+        }
+    }
+
+    /// One automatic prompt per lock cycle. Called on launch and on returning to
+    /// foreground; if the user cancels, we do NOT loop the system sheet — the lock
+    /// screen's button (`unlock()`) is the retry path.
+    func autoUnlockIfNeeded() async {
+        guard !autoPrompted else { return }
+        autoPrompted = true
+        await unlock()
     }
 
     /// Run the unlock prompt. No-op while a prompt is already up.
     func unlock() async {
         guard isLocked, !authenticating else { return }
         guard isEnabled() else { isLocked = false; return }
+        guard authenticator.isAvailable else { isLocked = false; return }   // fail open
         authenticating = true
         defer { authenticating = false }
         if await authenticator.authenticate(reason: "Unlock EchoMind") {

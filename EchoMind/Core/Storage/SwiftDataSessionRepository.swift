@@ -92,6 +92,19 @@ actor SwiftDataSessionRepository: SessionRepository {
         try modelContext.save()
     }
 
+    /// F3: rename only while the title is still the recording-time placeholder.
+    /// Check + write happen inside this actor in one call, so a user rename that
+    /// landed while the titler's LLM call was running can never be overwritten
+    /// (the pipeline's pre-check alone would be check-then-act across an await).
+    func renameIfPlaceholder(sessionID: UUID, to title: String) async throws -> Bool {
+        guard let session = try sessionModel(id: sessionID) else { throw StorageError.sessionNotFound }
+        guard SessionNaming.isPlaceholder(session.title, createdAt: session.createdAt) else { return false }
+        session.title = title
+        session.updatedAt = Date()
+        try modelContext.save()
+        return true
+    }
+
     func setSpeakerLabels(_ labels: [UUID: String], sessionId: UUID) async throws {
         guard let session = try sessionModel(id: sessionId) else { throw StorageError.sessionNotFound }
         for segment in session.segments {

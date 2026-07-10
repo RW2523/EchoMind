@@ -66,6 +66,44 @@ private final class MockAuthenticator: AppLockAuthenticating {
         #expect(!controller.isLocked)
     }
 
+    @Test func failsOpenWhenDeviceCanNoLongerAuthenticate() async {
+        // User enables the lock, then removes their device passcode: authentication
+        // is impossible. A lock nobody can pass would brick the app (Settings — the
+        // only way to disable it — is behind the lock), so it must fail open.
+        let auth = MockAuthenticator()
+        auth.isAvailable = false
+        let atLaunch = AppLockController(authenticator: auth, isEnabled: { true })
+        #expect(!atLaunch.isLocked)   // never locks at launch
+
+        auth.isAvailable = true
+        let controller = AppLockController(authenticator: auth, isEnabled: { true })
+        #expect(controller.isLocked)
+        auth.isAvailable = false      // passcode removed while locked
+        await controller.unlock()
+        #expect(!controller.isLocked)
+        #expect(auth.promptCount == 0)   // opened without a prompt
+    }
+
+    @Test func autoPromptFiresOncePerLockCycle() async {
+        // Cancelling the system prompt must NOT loop it — the lock screen's button
+        // is the retry path. Re-locking (background) re-arms one automatic prompt.
+        let auth = MockAuthenticator()
+        auth.succeed = false          // simulate cancel/failure
+        let controller = AppLockController(authenticator: auth, isEnabled: { true })
+
+        await controller.autoUnlockIfNeeded()
+        await controller.autoUnlockIfNeeded()   // e.g. scenePhase flaps to .active again
+        #expect(auth.promptCount == 1)
+        #expect(controller.isLocked)
+
+        await controller.unlock()               // manual button still prompts
+        #expect(auth.promptCount == 2)
+
+        controller.handleScenePhase(.background)   // new lock cycle
+        await controller.autoUnlockIfNeeded()
+        #expect(auth.promptCount == 3)
+    }
+
     @Test func settingTurnedOffWhileLockedUnlocksWithoutPrompt() async {
         var enabled = true
         let auth = MockAuthenticator()

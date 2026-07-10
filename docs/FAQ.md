@@ -22,7 +22,7 @@ you later download an optional on-device model, which is explicit and consent-ga
 **Where are my recordings stored? Can I delete them?**
 On your device only. Toggle "Keep audio recordings" in Settings. Delete individual sessions
 by swiping, or wipe everything (sessions, audio, and memory) via **Settings ▸ Delete All
-Data**. Export everything as Markdown via **Export All Data**.
+Data**. Export everything — Markdown transcripts *and* audio — via **Export All Data**.
 
 **Why is a summary missing?**
 It needs Apple Intelligence enabled (*Settings ▸ Apple Intelligence & Siri*). On unsupported
@@ -32,6 +32,16 @@ is available.
 **Recording stopped when I got a call — did I lose it?**
 No. EchoMind pauses for interruptions and resumes; your transcript up to that point is saved.
 Recording also survives the screen locking.
+
+**Can I lock the app?**
+Yes — turn on **Settings ▸ Require Face ID** and EchoMind locks whenever you leave it
+(Face ID / Touch ID, passcode fallback). Biometric data is handled entirely by iOS;
+the app never sees it.
+
+**Why does EchoMind ask for Reminders access?**
+Only if you tap **Add to Reminders** on a report — it writes those action items to
+Apple Reminders and reads nothing back. Note the Reminders app follows your own
+iCloud settings, so items you send there sync like any other reminder.
 
 **What is "What EchoMind Remembers"?**
 A long-term memory of durable facts (people, projects, decisions) EchoMind distills from your

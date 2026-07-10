@@ -142,6 +142,40 @@ mark each ✅/❌, and note anything odd. Anything in **P0** must pass to submit
   Turn it back on.
 - Result: ⬜  Notes:
 
+### P1-7 · Face ID app lock
+1. Settings ▸ **Require Face ID** → toggle ON. **Expect:** Face ID prompt fires first;
+   only on success does the toggle stay on.
+2. Background the app (Home swipe), reopen. **Expect:** lock screen with one automatic
+   Face ID prompt. **Cancel** it. **Expect:** NO re-prompt loop — the "Unlock" button
+   re-prompts on tap.
+3. Unlock, toggle OFF, background + reopen. **Expect:** no lock.
+4. (Edge) With the lock ON, remove the device passcode in iOS Settings, relaunch.
+   **Expect:** app opens WITHOUT locking (fails open — no lockout). Re-add passcode.
+- Result: ⬜  Notes:
+
+### P1-8 · Add to Reminders
+1. Open a session report with action items ▸ **Add to Reminders**. First time:
+   **Expect:** the Reminders permission prompt; on allow, "Added N reminders." and the
+   items appear in the Reminders app with owner + meeting in the notes.
+2. Tap it again fast (double-tap). **Expect:** no duplicate batch from one tap.
+3. Deny the permission (iOS Settings ▸ EchoMind ▸ Reminders OFF), tap again.
+   **Expect:** clear "Allow Reminders access in iOS Settings" message, no crash.
+- Result: ⬜  Notes:
+
+### P1-9 · AI session titles
+1. Record a short real meeting (~1 min, on-topic), stop, watch the session detail.
+- **Expect:** within ~10s of the report appearing, the placeholder "Meeting <date>"
+  title becomes a short descriptive title (detail header AND Sessions list after
+  re-entry). Rename the session manually, regenerate the report: your title stays.
+- Result: ⬜  Notes:
+
+### P1-10 · Voice barge-in (hands-free)
+1. Ask tab ▸ waveform (hands-free) ▸ ask something with a long answer; while the agent
+   is speaking, **start talking**.
+- **Expect:** speech stops within ~1s and it listens to you (echo cancellation means it
+  shouldn't interrupt itself from its own TTS). The ✋ button still works as fallback.
+- Result: ⬜  Notes:
+
 ---
 
 ## P2 — Polish (nice to confirm)

@@ -28,6 +28,7 @@ final class SessionDetailViewModel {
     private let diarizer: any DiarizationService
     private let reportGenerator: (any ReportGenerating)?
     private let reminders: (any ReminderExporting)?
+    private let titler: (any SessionTitling)?
     private var pendingWatcher: Task<Void, Never>?
 
     init(session: SessionSnapshot,
@@ -37,7 +38,8 @@ final class SessionDetailViewModel {
          audioStore: AudioStore = AudioStore(),
          diarizer: any DiarizationService = UnavailableDiarizationService(),
          reportGenerator: (any ReportGenerating)? = nil,
-         reminders: (any ReminderExporting)? = nil) {
+         reminders: (any ReminderExporting)? = nil,
+         titler: (any SessionTitling)? = nil) {
         self.session = session
         self.draftTitle = session.title
         self.repository = repository
@@ -47,6 +49,7 @@ final class SessionDetailViewModel {
         self.audioStore = audioStore
         self.diarizer = diarizer
         self.reminders = reminders
+        self.titler = titler
     }
 
     // MARK: - Reminders export (F5)
@@ -55,7 +58,9 @@ final class SessionDetailViewModel {
 
     /// Send the report's action items to Apple Reminders (explicit user tap only).
     func exportActionItemsToReminders() async {
+        guard !isExportingReminders else { return }   // double-tap → duplicate reminders
         guard let reminders, case .available(let summary) = summaryState else { return }
+        remindersMessage = nil
         let drafts = ReminderDrafts.make(from: summary.actionItems, sessionTitle: session.title)
         guard !drafts.isEmpty else { remindersMessage = "No action items to add."; return }
         isExportingReminders = true
@@ -102,11 +107,20 @@ final class SessionDetailViewModel {
     var continuityNotes: [String] { session.continuityNotes }
 
     func load() async {
-        if let fresh = try? await repository.fetchSession(id: session.id) { session = fresh }
+        if let fresh = try? await repository.fetchSession(id: session.id) { apply(fresh) }
         segments = (try? await repository.fetchSegments(sessionId: session.id)) ?? []
         actionStates = normalizedActionStates()
         refreshSummaryState()
         watchPendingReportIfNeeded()
+    }
+
+    /// Adopt a fresh snapshot, keeping an in-progress rename edit: `draftTitle`
+    /// follows the stored title only while the user hasn't diverged from it.
+    private func apply(_ fresh: SessionSnapshot) {
+        if draftTitle == session.title { draftTitle = fresh.title }
+        session = fresh
+        actionStates = normalizedActionStates()
+        refreshSummaryState()
     }
 
     func refreshSummaryState() {
@@ -129,21 +143,26 @@ final class SessionDetailViewModel {
     }
 
     /// R1: while a report is generating in the background, poll for completion so
-    /// the detail updates without any user action.
+    /// the detail updates without any user action. After the summary lands, keeps
+    /// watching a few more beats — the AI title and continuity notes are written
+    /// seconds later in the pipeline, and stopping early left a stale placeholder
+    /// title on screen (F3).
     private func watchPendingReportIfNeeded() {
         guard session.reportState == .pending, session.summaryJSON == nil else { return }
         pendingWatcher?.cancel()
         pendingWatcher = Task { [weak self] in
-            for _ in 0..<15 {
+            var pollsAfterSummary = 6
+            for _ in 0..<24 {
                 try? await Task.sleep(for: .milliseconds(1200))
                 guard let self, !self.isManuallyGenerating else { return }
                 guard let fresh = try? await self.repository.fetchSession(id: self.session.id) else { continue }
-                if fresh.reportState != .pending || fresh.summaryJSON != nil {
-                    self.session = fresh
-                    self.actionStates = self.normalizedActionStates()
-                    self.refreshSummaryState()
-                    return
-                }
+                let summaryLanded = fresh.reportState != .pending || fresh.summaryJSON != nil
+                guard summaryLanded else { continue }
+                self.apply(fresh)
+                // Done once the AI title arrived (or was never coming — timeout below).
+                if !SessionNaming.isPlaceholder(fresh.title, createdAt: fresh.createdAt) { return }
+                pollsAfterSummary -= 1
+                if pollsAfterSummary <= 0 { return }
             }
         }
     }
@@ -189,7 +208,17 @@ final class SessionDetailViewModel {
             session.summaryJSON = json
             session.reportState = .ready
             actionStates = normalizedActionStates()
+            remindersMessage = nil   // items may have changed; drop stale "Added N"
             summaryState = .available(summary)
+            // F3: the manual Generate/Regenerate path titles the session too, under
+            // the same placeholder-only rule as the auto pipeline.
+            if let titler,
+               SessionNaming.isPlaceholder(session.title, createdAt: session.createdAt),
+               let title = await titler.title(overview: summary.overview, decisions: summary.keyDecisions),
+               (try? await repository.renameIfPlaceholder(sessionID: session.id, to: title)) == true {
+                if draftTitle == session.title { draftTitle = title }
+                session.title = title
+            }
         } catch is CancellationError {
             summaryState = previous
         } catch SummarizerError.notEnoughContent {

@@ -69,6 +69,8 @@ final class AppDependencies {
     let appLock: AppLockController
     /// F5: action items → Apple Reminders (explicit user tap only).
     let reminderExporter: any ReminderExporting = EventKitReminderExporter()
+    /// F3: names sessions from their reports (shared by the pipeline + manual path).
+    let sessionTitler: any SessionTitling
 
     /// Mirrors `settingsStore.onboardingComplete` but observable, so flipping it
     /// on completion re-renders `RootView` without an async flash (§2.7).
@@ -158,11 +160,13 @@ final class AppDependencies {
         let distiller = MemoryDistiller(gateway: routing, store: memoryStore)
         let continuity = MeetingContinuityService(
             sessions: sessionRepo, chunks: chunkRepo, embedder: embedder, gateway: routing)
+        let titler = MeetingTitler(gateway: routing)
+        self.sessionTitler = titler
         let report = ReportPipeline(
             sessions: sessionRepo, summarizer: summarizer,
             availability: { await MainActor.run { monitor.status } },
             grouping: grouping, distiller: distiller, continuity: continuity,
-            titler: MeetingTitler(gateway: routing))
+            titler: titler)
         self.reportGenerator = report
         self.reportReconciler = ReportReconciler(
             sessions: sessionRepo, reportGenerator: report,

@@ -23,6 +23,10 @@ nonisolated protocol SessionRepository: Sendable {
     func search(matching query: String) async throws -> [SessionSnapshot]
     func previewText(sessionID: UUID, maxCharacters: Int) async throws -> String
     func rename(sessionID: UUID, to title: String) async throws
+    /// F3: atomic "rename only if still the date placeholder" (auto-titler).
+    /// Returns false when a user rename already landed — the user's title wins.
+    @discardableResult
+    func renameIfPlaceholder(sessionID: UUID, to title: String) async throws -> Bool
 
     // M3: persist diarization results (segmentId → speaker label).
     func setSpeakerLabels(_ labels: [UUID: String], sessionId: UUID) async throws

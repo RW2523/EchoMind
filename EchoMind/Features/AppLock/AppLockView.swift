@@ -18,7 +18,7 @@ struct AppLockView: View {
                 Button {
                     Task { await controller.unlock() }
                 } label: {
-                    Label("Unlock with \(controller.methodName)", systemImage: "faceid")
+                    Label("Unlock with \(controller.methodName)", systemImage: methodGlyph)
                         .font(.body.weight(.semibold))
                         .padding(.horizontal, 20)
                         .padding(.vertical, 12)
@@ -26,6 +26,16 @@ struct AppLockView: View {
                 .buttonStyle(.borderedProminent)
             }
         }
-        .task { await controller.unlock() }
+        .task { await controller.autoUnlockIfNeeded() }
+    }
+
+    /// Icon matching the actual unlock method (the label already adapts).
+    private var methodGlyph: String {
+        switch controller.methodName {
+        case "Touch ID": return "touchid"
+        case "Optic ID": return "opticid"
+        case "Passcode": return "lock.open"
+        default: return "faceid"
+        }
     }
 }

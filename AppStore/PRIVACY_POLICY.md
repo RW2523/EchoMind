@@ -1,6 +1,6 @@
 # EchoMind Privacy Policy
 
-_Last updated: 2026-07-08_
+_Last updated: 2026-07-09_
 
 EchoMind is designed to keep your data private. This policy explains what happens
 to your information — the short version is: **it stays on your iPhone.**
@@ -41,6 +41,15 @@ your device.
 - **Microphone** — used only while you are recording a session, to capture audio
   for transcription.
 - **Speech Recognition** — used to transcribe your recordings on-device.
+- **Face ID / Touch ID** *(optional)* — if you turn on the app lock, iOS
+  authenticates you when the app opens. Biometric data is handled entirely by
+  iOS; EchoMind never sees or stores it.
+- **Reminders** *(optional)* — only when you tap "Add to Reminders" on a
+  report, to create reminders from your action items. EchoMind writes the
+  reminders you asked for and reads nothing back. Note: reminders you create
+  live in Apple's Reminders app and follow *its* settings — if your Reminders
+  sync with iCloud, those items will too. EchoMind itself still sends nothing
+  anywhere.
 
 You can revoke these at any time in the iOS Settings app.
 
