@@ -16,12 +16,36 @@ struct DebugStorageSection: View {
             Button("Insert + index sample document") { Task { await insertSampleDocument() } }
             Button("Insert 9,000-word fixture") { Task { await insertFixture() } }
             Button("Run retrieval eval") { Task { await runEval() } }
+            Button("Run retrieval benchmark") { Task { await runBenchmark() } }
             Button("Fetch counts") { Task { await fetchCounts() } }
             Button("Delete dummy sessions", role: .destructive) { Task { await deleteDummies() } }
             Text(status)
                 .font(.caption.monospaced())
                 .foregroundStyle(.secondary)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+
+    /// Recall@k + MRR over the fixed handbook and (if any recordings exist) a
+    /// label-free pass over the real knowledge index. Copy the text to compare
+    /// embedders across runs.
+    private func runBenchmark() async {
+        status = "Running benchmark…"
+        let embedder = dependencies.embeddingService
+        var report = "Embedder: \(dependencies.embedderIdentity)\n"
+        if let handbook = await RetrievalBenchmarkRunner.handbook(embedder: embedder) {
+            report += "\n" + handbook.formatted() + "\n"
+        }
+        if let live = await RetrievalBenchmarkRunner.liveSelfRetrieval(
+            sessions: dependencies.sessionRepository,
+            chunks: dependencies.chunkRepository,
+            embedder: embedder) {
+            report += "\n" + live.formatted()
+        } else {
+            report += "\n(live self-retrieval skipped — no recorded sessions with reports yet)"
+        }
+        status = report
     }
 
     private func insertDummy() async {
