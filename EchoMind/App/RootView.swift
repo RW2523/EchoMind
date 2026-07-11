@@ -78,6 +78,8 @@ private struct ScreenshotRouter: View {
             NavigationStack { AskView() }
         case "orb":
             VoiceOrbGallery()
+        case "voice":
+            VoiceRouteHarness()
         case "report":
             NavigationStack {
                 Group {
@@ -93,6 +95,37 @@ private struct ScreenshotRouter: View {
             }
         default:
             MainTabView()
+        }
+    }
+}
+
+/// Presents the live voice conversation exactly as the Ask tab does — for
+/// reproducing voice-mode issues without hand-tapping (`--screen voice`).
+private struct VoiceRouteHarness: View {
+    @Environment(AppDependencies.self) private var dependencies
+    @State private var voice: VoiceSessionController?
+
+    var body: some View {
+        Group {
+            if let voice {
+                VoiceConversationView(voice: voice,
+                                      suggestBetterVoice: dependencies.shouldSuggestBetterVoice) { }
+            } else {
+                BrandBackground()
+            }
+        }
+        .task {
+            guard voice == nil else { return }
+            let input = LiveVoiceInput(audio: dependencies.audioCapturing,
+                                       transcription: dependencies.transcriptionService,
+                                       permissions: dependencies.permissions,
+                                       assets: dependencies.speechAssets)
+            voice = VoiceSessionController(input: input,
+                                          synthesizer: dependencies.makeSpeechSynthesizer(),
+                                          onQuestion: { _ in "Test answer." },
+                                          onQuestionStream: { _ in
+                                              AsyncThrowingStream { $0.yield("Test answer."); $0.finish() }
+                                          })
         }
     }
 }

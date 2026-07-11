@@ -63,20 +63,36 @@ actor AudioEngineManager: AudioCapturing {
         self.engine = engine
         // Enable voice-processing (AEC) on the I/O nodes before the graph starts.
         if voiceProcessingEnabled {
-            try? engine.inputNode.setVoiceProcessingEnabled(true)
-            try? engine.outputNode.setVoiceProcessingEnabled(true)
+            do {
+                try engine.inputNode.setVoiceProcessingEnabled(true)
+                try engine.outputNode.setVoiceProcessingEnabled(true)
+            } catch {
+                // Voice processing isn't supported here — carry on with plain capture
+                // rather than risk an invalid input format below.
+            }
+            // Enabling voice processing can leave the input node momentarily without a
+            // valid format; installing a tap on a 0 Hz / 0-channel node raises an
+            // NSException that aborts the whole app. If that happened, back it out.
+            let vpFormat = engine.inputNode.outputFormat(forBus: 0)
+            if vpFormat.sampleRate <= 0 || vpFormat.channelCount == 0 {
+                try? engine.inputNode.setVoiceProcessingEnabled(false)
+                try? engine.outputNode.setVoiceProcessingEnabled(false)
+            }
         }
         let (stream, continuation) = AsyncThrowingStream<AudioBufferBox, Error>.makeStream(bufferingPolicy: .unbounded)
         self.bufferContinuation = continuation
 
-        installTap(on: engine)
-        engine.prepare()
+        engine.prepare()          // settle the input format before tapping
         do {
+            try installTap(on: engine)
             try engine.start()
         } catch {
-            continuation.finish(throwing: AudioCaptureError.engineStartFailed(error.localizedDescription))
+            let message = (error as? AudioCaptureError).map { "\($0)" } ?? error.localizedDescription
+            continuation.finish(throwing: AudioCaptureError.engineStartFailed(message))
             self.engine = nil
-            throw AudioCaptureError.engineStartFailed(error.localizedDescription)
+            self.bufferContinuation = nil
+            try? configurator.deactivate()
+            throw AudioCaptureError.engineStartFailed(message)
         }
 
         state = .recording
@@ -109,9 +125,16 @@ actor AudioEngineManager: AudioCapturing {
 
     // MARK: - Tap
 
-    private func installTap(on engine: AVAudioEngine) {
+    private func installTap(on engine: AVAudioEngine) throws {
         let input = engine.inputNode
         let format = input.outputFormat(forBus: 0)
+        // A 0 Hz / 0-channel format means the mic isn't usable (no input route, or
+        // voice processing left the node invalid). `installTap` with such a format
+        // raises an NSException that can't be caught in Swift and aborts the app —
+        // so refuse up front and surface a normal error the caller already handles.
+        guard format.sampleRate > 0, format.channelCount > 0 else {
+            throw AudioCaptureError.engineStartFailed("No usable audio input format.")
+        }
         let bufferCont = bufferContinuation
         let eventCont = eventContinuation
         let meter = levelMeter
@@ -125,7 +148,7 @@ actor AudioEngineManager: AudioCapturing {
     private func reinstallTap() {
         guard let engine else { return }
         engine.inputNode.removeTap(onBus: 0)
-        installTap(on: engine)
+        try? installTap(on: engine)
         emitInputFormat(engine)
     }
 
@@ -135,8 +158,8 @@ actor AudioEngineManager: AudioCapturing {
         let fresh = AVAudioEngine()
         engine = fresh
         try? configurator.activate()
-        installTap(on: fresh)
         fresh.prepare()
+        guard (try? installTap(on: fresh)) != nil else { return }
         try? fresh.start()
         emitInputFormat(fresh)
         emit(.stateChanged(state))
