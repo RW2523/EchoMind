@@ -48,9 +48,14 @@ First release. Record meetings, get instant on-device summaries and action items
 organize by topic, and ask your meetings anything — all private, all on-device.
 
 ## Support / Privacy URLs (required)
-- Support URL: https://ajace.com/echomind/support
-- Marketing URL (optional): https://ajace.com/echomind
-- Privacy Policy URL: https://ajace.com/echomind/privacy   (host AppStore/PRIVACY_POLICY.md)
+Live now, served by GitHub Pages from `docs/` (verified 200):
+- **Privacy Policy URL:** https://rw2523.github.io/EchoMind/privacy.html
+- **Support URL:** https://rw2523.github.io/EchoMind/support.html
+- Marketing URL (optional): https://rw2523.github.io/EchoMind/
+
+If you later publish these on ajace.com, update the two required URLs in App Store
+Connect and keep the pages reachable — Apple re-checks them on every review.
+(The earlier ajace.com/echomind/privacy + /support paths returned 404.)
 
 ## App Privacy questionnaire
 - **Data collection: NONE.** Answer "No, we do not collect data from this app."
