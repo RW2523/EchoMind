@@ -141,6 +141,9 @@ right place to shake those out first.
 | Error | Fix |
 |---|---|
 | "does not have permission to create iOS App Store provisioning profiles" | Not enrolled in the paid program yet (Phase 1) |
+| "No Account for Team …" | Sign the enrolled Apple ID into Xcode ▸ Settings ▸ Accounts |
+| "Your team has no devices from which to generate a provisioning profile" | **Plug in an iPhone** (trusted, Developer Mode on) and re-run. Automatic signing signs the archive for development first — which needs one registered device — and the export step then re-signs it for the App Store. Alternatively add the device UDID at developer.apple.com ▸ Devices. |
+| "conflicting provisioning settings … Apple Distribution has been manually specified" | Don't pass `CODE_SIGN_IDENTITY` on the command line; automatic signing handles it (`ExportOptions.plist` does the distribution re-sign) |
 | "The bundle version must be higher than the previously uploaded version" | `./AppStore/bump_build.sh`, then re-archive |
 | "No provider associated with App Store Connect user" | Free account, or the wrong Apple ID is signed into Xcode |
 | Missing `Info.plist` encryption value | Already handled — `ITSAppUsesNonExemptEncryption = NO` |
