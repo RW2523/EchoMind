@@ -82,9 +82,14 @@ actor AudioEngineManager: AudioCapturing {
         let (stream, continuation) = AsyncThrowingStream<AudioBufferBox, Error>.makeStream(bufferingPolicy: .unbounded)
         self.bufferContinuation = continuation
 
-        engine.prepare()          // settle the input format before tapping
         do {
+            // Canonical order: tap first (connects the input node into the graph),
+            // THEN prepare. Preparing an engine whose graph has no nodes raises an
+            // NSException on device (AVAudioEngineGraph::Initialize) — that was the
+            // record-button crash on iPhone. The invalid-format guard inside
+            // installTap covers the voice-processing case without reordering.
             try installTap(on: engine)
+            engine.prepare()
             try engine.start()
         } catch {
             let message = (error as? AudioCaptureError).map { "\($0)" } ?? error.localizedDescription
@@ -158,8 +163,9 @@ actor AudioEngineManager: AudioCapturing {
         let fresh = AVAudioEngine()
         engine = fresh
         try? configurator.activate()
-        fresh.prepare()
+        // Same canonical order as start(): tap connects the input node, then prepare.
         guard (try? installTap(on: fresh)) != nil else { return }
+        fresh.prepare()
         try? fresh.start()
         emitInputFormat(fresh)
         emit(.stateChanged(state))
