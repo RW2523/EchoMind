@@ -13,11 +13,15 @@ import Accelerate
 
 #if canImport(MLXEmbedders)
 import MLXEmbedders
+import MLXLMCommon
+import MLXHuggingFace
+import HuggingFace
+import Tokenizers
 import MLX
 
 actor GemmaEmbeddingService: EmbeddingService {
     private let model: LocalModel
-    private var container: ModelContainer?
+    private var container: EmbedderModelContainer?
 
     init(model: LocalModel) { self.model = model }
 
@@ -28,7 +32,9 @@ actor GemmaEmbeddingService: EmbeddingService {
     func prepareAssets() async throws {
         if container != nil { return }
         do {
-            container = try await MLXEmbedders.loadModelContainer(
+            container = try await EmbedderModelFactory.shared.loadContainer(
+                from: #hubDownloader(),
+                using: #huggingFaceTokenizerLoader(),
                 configuration: ModelConfiguration(id: model.huggingFaceRepo))
         } catch {
             throw EmbeddingError.assetsUnavailable
@@ -46,12 +52,13 @@ actor GemmaEmbeddingService: EmbeddingService {
     /// input. Reconcile here if the MLXEmbedders API changed.
     private func rawEmbed(_ texts: [String]) async throws -> [[Float]] {
         guard let container else { throw EmbeddingError.assetsUnavailable }
-        return await container.perform { (model, tokenizer, pooling) in
+        return await container.perform { context in
             texts.map { text in
-                let tokens = tokenizer.encode(text: text, addSpecialTokens: true)
+                let tokens = context.tokenizer.encode(text: text, addSpecialTokens: true)
                 let ids = MLXArray(tokens).reshaped([1, tokens.count])
-                let hidden = model(ids)
-                let pooled = pooling(hidden, normalize: false)
+                let output = context.model(ids, positionIds: nil, tokenTypeIds: nil, attentionMask: nil)
+                let pooled = context.pooling(output, normalize: false)
+                pooled.eval()   // MLXArray must be evaluated before leaving the actor
                 return pooled.asArray(Float.self)
             }
         }

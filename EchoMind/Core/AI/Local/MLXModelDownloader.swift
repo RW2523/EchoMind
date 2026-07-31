@@ -9,6 +9,9 @@ import Foundation
 #if canImport(MLXLLM)
 import MLXLLM
 import MLXLMCommon
+import MLXHuggingFace
+import HuggingFace
+import Tokenizers
 
 nonisolated struct MLXModelDownloader: ModelDownloadService {
     var engineLinked: Bool { true }
@@ -22,7 +25,10 @@ nonisolated struct MLXModelDownloader: ModelDownloadService {
     func download(_ model: LocalModel, onProgress: @escaping @Sendable (Double) -> Void) async throws {
         do {
             let configuration = ModelConfiguration(id: model.huggingFaceRepo)
-            _ = try await LLMModelFactory.shared.loadContainer(configuration: configuration) { progress in
+            _ = try await LLMModelFactory.shared.loadContainer(
+                from: #hubDownloader(),
+                using: #huggingFaceTokenizerLoader(),
+                configuration: configuration) { progress in
                 onProgress(progress.fractionCompleted)
             }
             try ModelStorage.mark(model)

@@ -16,6 +16,7 @@ echo "▸ Archiving EchoMind (build $BUILD)…"
 rm -rf build/EchoMind.xcarchive build/export
 
 xcodebuild -scheme EchoMind -configuration Release \
+  -skipPackagePluginValidation -skipMacroValidation \
   -destination 'generic/platform=iOS' \
   -archivePath build/EchoMind.xcarchive \
   CURRENT_PROJECT_VERSION="$BUILD" \

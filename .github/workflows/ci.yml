@@ -53,11 +53,20 @@ jobs:
           echo "Using simulator: $NAME"
           echo "name=$NAME" >> "$GITHUB_OUTPUT"
 
+      - name: Install Metal Toolchain (needed to compile MLX GPU kernels)
+        run: |
+          xcodebuild -downloadComponent MetalToolchain || \
+            echo "::warning::Metal Toolchain download failed — MLX targets may not compile"
+
       - name: Build
         run: |
           set -o pipefail
+          # -skipPackagePluginValidation/-skipMacroValidation: mlx-swift ships a build
+          # plugin and mlx-swift-lm uses macros; CLI builds must skip the interactive
+          # trust prompt. Trusted deps, pinned in the project.
           xcodebuild -scheme EchoMind \
             -destination "platform=iOS Simulator,name=${{ steps.sim.outputs.name }}" \
+            -skipPackagePluginValidation -skipMacroValidation \
             build
 
       - name: Test (serial — CoreSimulator dislikes parallel here)
@@ -65,6 +74,7 @@ jobs:
           set -o pipefail
           xcodebuild -scheme EchoMind \
             -destination "platform=iOS Simulator,name=${{ steps.sim.outputs.name }}" \
+            -skipPackagePluginValidation -skipMacroValidation \
             -only-testing:EchoMindTests \
             -parallel-testing-enabled NO \
             test

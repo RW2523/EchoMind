@@ -78,6 +78,8 @@ private struct ScreenshotRouter: View {
             NavigationStack { AskView() }
         case "orb":
             VoiceOrbGallery()
+        case "aimodels":
+            NavigationStack { AIModelsView() }
         case "voice":
             VoiceRouteHarness()
         case "report":

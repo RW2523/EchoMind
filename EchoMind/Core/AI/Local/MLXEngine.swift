@@ -13,6 +13,9 @@ import Foundation
 #if canImport(MLXLLM)
 import MLXLLM
 import MLXLMCommon
+import MLXHuggingFace
+import HuggingFace
+import Tokenizers
 
 /// On-device LLM via Apple's MLX (Metal) runtime. An actor: weight loading and
 /// generation are serialized, and `container` state is race-free.
@@ -31,8 +34,14 @@ actor MLXEngine: LocalLLMEngine {
     func load() async throws {
         if container != nil { return }
         do {
+            // #hubDownloader / #huggingFaceTokenizerLoader are MLXHuggingFace macros
+            // adapting the HuggingFace hub client to MLX's Downloader/TokenizerLoader
+            // seams (the 3.x replacement for the old configuration-only overload).
             let configuration = ModelConfiguration(id: model.huggingFaceRepo)
-            container = try await LLMModelFactory.shared.loadContainer(configuration: configuration)
+            container = try await LLMModelFactory.shared.loadContainer(
+                from: #hubDownloader(),
+                using: #huggingFaceTokenizerLoader(),
+                configuration: configuration)
         } catch {
             throw LocalLLMEngineError.loadFailed(String(describing: error))
         }
@@ -46,7 +55,7 @@ actor MLXEngine: LocalLLMEngine {
                 let input = try await context.processor.prepare(input: UserInput(messages: chat))
                 let parameters = GenerateParameters(maxTokens: maxTokens, temperature: 0.4)
                 let result = try MLXLMCommon.generate(
-                    input: input, parameters: parameters, context: context) { _ in .more }
+                    input: input, parameters: parameters, context: context) { (_: [Int]) in .more }
                 return result.output
             }
         } catch {
