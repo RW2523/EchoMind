@@ -55,6 +55,28 @@ actor SwiftDataSessionRepository: SessionRepository {
         try modelContext.save()               // one transaction
     }
 
+    /// Wipe every session + segment with BOUNDED memory (Delete All Data).
+    /// A store-level batch delete is rejected here (TranscriptSegment's mandatory
+    /// `session` inverse → "constraint trigger violation"), and per-session deletes
+    /// materialize each session's whole cascade at once — which jetsams the app on
+    /// large libraries. Middle path: delete in fixed-size batches, saving as we go,
+    /// so peak memory stays ~500 objects no matter how big the library is.
+    func deleteAllSessions() async throws {
+        try deleteInBatches(TranscriptSegment.self)   // children first (mandatory inverse)
+        try deleteInBatches(Session.self)
+    }
+
+    private func deleteInBatches<T: PersistentModel>(_ type: T.Type, batchSize: Int = 500) throws {
+        while true {
+            var descriptor = FetchDescriptor<T>()
+            descriptor.fetchLimit = batchSize
+            let batch = try modelContext.fetch(descriptor)
+            if batch.isEmpty { break }
+            for object in batch { modelContext.delete(object) }
+            try modelContext.save()   // release the batch before fetching the next
+        }
+    }
+
     // MARK: - Phase 4
 
     func recentSessions(limit: Int?) async throws -> [SessionSnapshot] {

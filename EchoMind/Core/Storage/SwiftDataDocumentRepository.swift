@@ -34,6 +34,12 @@ actor SwiftDataDocumentRepository: DocumentRepository {
         try modelContext.save()
     }
 
+    /// Batch wipe (Delete All Data) — one operation, no objects materialized.
+    func deleteAllDocuments() async throws {
+        try modelContext.delete(model: Document.self)
+        try modelContext.save()
+    }
+
     // MARK: - Helpers
 
     private func documentModel(id: UUID) throws -> Document? {

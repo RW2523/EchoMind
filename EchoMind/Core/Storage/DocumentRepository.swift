@@ -5,6 +5,8 @@ import Foundation
 nonisolated protocol DocumentRepository: Sendable {
     func create(_ snapshot: DocumentSnapshot) async throws
     func fetchAll() async throws -> [DocumentSnapshot]
+    /// Batch-wipe all documents without materializing them (Delete All Data).
+    func deleteAllDocuments() async throws
     func fetchDocument(id: UUID) async throws -> DocumentSnapshot?
     func updateStatus(id: UUID, status: DocumentStatus) async throws
     func delete(id: UUID) async throws

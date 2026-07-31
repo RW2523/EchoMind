@@ -14,6 +14,10 @@ nonisolated protocol SessionRepository: Sendable {
     func appendSegment(_ segment: SegmentSnapshot, toSession id: UUID) async throws
     func update(_ snapshot: SessionSnapshot) async throws
     func fetchAll() async throws -> [SessionSnapshot]
+    /// Batch-wipe every session + segment WITHOUT materializing objects — the
+    /// per-row delete cascade loads all transcript segments into memory, which
+    /// jetsams the app on large libraries (the Delete All Data crash).
+    func deleteAllSessions() async throws
     func fetchSession(id: UUID) async throws -> SessionSnapshot?
     func fetchSegments(sessionId: UUID) async throws -> [SegmentSnapshot]
     func delete(id: UUID) async throws

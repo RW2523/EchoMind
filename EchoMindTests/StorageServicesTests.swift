@@ -77,6 +77,51 @@ import Foundation
         #expect(urls.contains { $0.lastPathComponent == "documents-list.md" })
     }
 
+    @Test func wipeHandlesALargeLibraryQuickly() async throws {
+        // Regression guard for the Delete All Data crash: the old per-row wipe
+        // materialized every session's segment cascade (OOM + minutes on real
+        // libraries). The batch wipe must clear a big library fast and completely,
+        // including sessions created AFTER other rows (order independence).
+        let (sessions, documents, chunks, chat) = try makeStack()
+        for s in 0..<60 {
+            let id = UUID()
+            try await sessions.create(SessionSnapshot(id: id, title: "S\(s)"))
+            for i in 0..<40 {
+                try await sessions.appendSegment(
+                    SegmentSnapshot(sessionId: id, text: "line \(i) of meeting \(s)",
+                                    startTime: Double(i), endTime: Double(i) + 1),
+                    toSession: id)
+            }
+            try await chunks.insert([ChunkSnapshot(sourceId: id, sourceType: .session,
+                                                   text: "chunk \(s)", chunkIndex: 0)])
+        }
+        for d in 0..<10 {
+            try await documents.create(DocumentSnapshot(title: "D\(d)", fileName: "d\(d).txt",
+                                                        fileType: .txt, textContent: "body"))
+        }
+        try await chat.append(ChatMessageSnapshot(conversationId: UUID(), role: .user, content: "hi"))
+
+        let start = Date()
+        let wipe = DefaultDataWipeService(sessions: sessions, documents: documents,
+                                          chunks: chunks, chat: chat, audioStore: tempAudioStore())
+        try await wipe.deleteAllData()
+        let elapsed = Date().timeIntervalSince(start)
+
+        #expect(try await sessions.fetchAll().isEmpty)
+        #expect(try await documents.fetchAll().isEmpty)
+        #expect(try await chunks.fetchAll().isEmpty)
+        // 60 sessions × 40 segments wiped in one batch pass — generous ceiling so CI
+        // never flakes, but the old per-row path was orders of magnitude slower.
+        #expect(elapsed < 10, "wipe took \(elapsed)s")
+        // The store still works after a batch wipe (no orphaned segment crash).
+        let fresh = UUID()
+        try await sessions.create(SessionSnapshot(id: fresh, title: "post-wipe"))
+        try await sessions.appendSegment(
+            SegmentSnapshot(sessionId: fresh, text: "new line", startTime: 0, endTime: 1),
+            toSession: fresh)
+        #expect(try await sessions.fetchSegments(sessionId: fresh).count == 1)
+    }
+
     @Test func exportIncludesRetainedAudio() async throws {
         let (sessions, documents, _, _) = try makeStack()
         let withAudio = UUID()

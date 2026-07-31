@@ -77,7 +77,7 @@ actor SwiftDataMemoryStore: MemoryStore {
     }
 
     func deleteAll() async throws {
-        for fact in try modelContext.fetch(FetchDescriptor<MemoryFact>()) { modelContext.delete(fact) }
+        try modelContext.delete(model: MemoryFact.self)   // batch — no materialization
         try modelContext.save()
     }
 

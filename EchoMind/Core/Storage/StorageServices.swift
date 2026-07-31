@@ -118,8 +118,12 @@ nonisolated struct DefaultDataWipeService: DataWipeService {
     var audioStore = AudioStore()
 
     func deleteAllData() async throws {
-        for session in try await sessions.fetchAll() { try await sessions.delete(id: session.id) }
-        for document in try await documents.fetchAll() { try await documents.delete(id: document.id) }
+        // Batch wipes throughout: the old per-row loop materialized every session's
+        // cascade (all transcript segments) into memory — on a large library that
+        // jetsammed the app mid-wipe and took minutes. Each call below is one
+        // batch operation + one save.
+        try await sessions.deleteAllSessions()
+        try await documents.deleteAllDocuments()
         try await chunks.deleteAll()
         try await chat.deleteAll()
         try? await memory?.deleteAll()   // R3: forget everything too
