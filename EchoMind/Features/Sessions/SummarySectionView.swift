@@ -120,8 +120,10 @@ struct SummarySectionView: View {
 
     private func reasonCopy(_ reason: AvailabilityStatus.TierBReason) -> String {
         switch reason {
-        case .deviceNotEligible: return "This iPhone doesn't support Apple Intelligence."
-        case .appleIntelligenceNotEnabled: return "Enable Apple Intelligence in iOS Settings to generate summaries."
+        case .deviceNotEligible:
+            return "This iPhone doesn't support Apple Intelligence. Download an on-device model (Settings ▸ On-Device AI ▸ AI Models) to generate summaries."
+        case .appleIntelligenceNotEnabled:
+            return "Enable Apple Intelligence in iOS Settings — or download an on-device model (Settings ▸ On-Device AI ▸ AI Models)."
         case .modelNotReady: return "The on-device model is still preparing. Try again shortly."
         case .unknown: return "Summaries aren't available right now."
         }

@@ -107,9 +107,9 @@ final class SettingsViewModel {
         case .tierA:
             return ("Apple Intelligence ready", nil)
         case .tierB(.deviceNotEligible):
-            return ("Not available", "This iPhone doesn't support Apple Intelligence.")
+            return ("Not available", "This iPhone doesn't support Apple Intelligence. A downloaded on-device model (AI Models below) powers summaries and answers instead.")
         case .tierB(.appleIntelligenceNotEnabled):
-            return ("Off", "Enable Apple Intelligence in iOS Settings for summaries and answers.")
+            return ("Off", "Enable Apple Intelligence in iOS Settings — or download an on-device model (AI Models below).")
         case .tierB(.modelNotReady):
             return ("Preparing", "The on-device model is still downloading. Try again later.")
         case .tierB(.unknown):

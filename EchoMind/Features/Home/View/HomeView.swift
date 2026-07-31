@@ -28,9 +28,12 @@ struct HomeView: View {
         .toolbar(.hidden, for: .navigationBar)
         .task {
             if model == nil {
-                let vm = HomeViewModel(repository: dependencies.sessionRepository,
-                                       memory: dependencies.memoryStore,
-                                       availability: dependencies.availabilityMonitor)
+                let deps = dependencies
+                let vm = HomeViewModel(repository: deps.sessionRepository,
+                                       memory: deps.memoryStore,
+                                       availability: deps.availabilityMonitor,
+                                       localModelReady: { deps.localModelReady },
+                                       suggestDownload: { deps.suggestModelDownload })
                 model = vm
                 await vm.load()
             } else {
@@ -64,6 +67,25 @@ struct HomeView: View {
                 stat("\(model.sessionCount)", "Sessions", "waveform")
                 stat("\(model.categoryCount)", "Types", "square.grid.2x2")
                 stat("\(model.memoryCount)", "Memories", "brain")
+            }
+            // Dual-mode AI: this device has no Apple Intelligence and no local model
+            // yet — point straight at the download instead of dead-ending.
+            if model.showModelDownloadCTA {
+                NavigationLink {
+                    AIModelsView()
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "arrow.down.circle.fill").foregroundStyle(DS.brandLight)
+                        Text("Download an on-device model to enable summaries, Ask, and voice")
+                            .font(.footnote)
+                            .multilineTextAlignment(.leading)
+                        Spacer(minLength: 0)
+                        Image(systemName: "chevron.right").font(.caption2).foregroundStyle(.secondary)
+                    }
+                    .padding(10)
+                    .background(DS.brand.opacity(0.14), in: RoundedRectangle(cornerRadius: DS.rSm, style: .continuous))
+                }
+                .buttonStyle(.plain)
             }
         }
         .padding(DS.lg)

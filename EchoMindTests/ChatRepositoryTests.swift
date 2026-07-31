@@ -22,6 +22,21 @@ import Foundation
         #expect(reloaded[1].sourceRefs == refs)
     }
 
+    @Test func deleteMessagesClearsOnlyThatConversation() async throws {
+        let container = try ModelContainerFactory.inMemory()
+        let repo = SwiftDataChatRepository(modelContainer: container)
+        let ask = UUID()
+        let other = UUID()
+        try await repo.append(ChatMessageSnapshot(conversationId: ask, role: .user, content: "hi"))
+        try await repo.append(ChatMessageSnapshot(conversationId: ask, role: .assistant, content: "hello"))
+        try await repo.append(ChatMessageSnapshot(conversationId: other, role: .user, content: "keep me"))
+
+        try await repo.deleteMessages(conversationId: ask)
+
+        #expect(try await repo.messages(conversationId: ask).isEmpty)          // cleared
+        #expect(try await repo.messages(conversationId: other).count == 1)     // untouched
+    }
+
     @Test func messagesReturnInChronologicalOrder() async throws {
         let container = try ModelContainerFactory.inMemory()
         let repo = SwiftDataChatRepository(modelContainer: container)

@@ -239,8 +239,10 @@ nonisolated struct RAGPipeline: RAGService {
 
     static func reasonText(_ reason: AvailabilityStatus.TierBReason) -> String {
         switch reason {
-        case .deviceNotEligible: return "This iPhone doesn't support Apple Intelligence."
-        case .appleIntelligenceNotEnabled: return "Enable Apple Intelligence in iOS Settings for AI answers."
+        case .deviceNotEligible:
+            return "This iPhone doesn't support Apple Intelligence. Download an on-device model (Settings ▸ AI Models) to enable AI answers."
+        case .appleIntelligenceNotEnabled:
+            return "Enable Apple Intelligence in iOS Settings — or download an on-device model (Settings ▸ AI Models)."
         case .modelNotReady: return "The on-device model is preparing."
         case .unknown: return "AI answers aren't available right now."
         }

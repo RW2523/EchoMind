@@ -6,6 +6,7 @@ struct AskView: View {
     @State private var model: AskViewModel?
     @State private var voice: VoiceSessionController?
     @State private var showVoiceMode = false
+    @State private var confirmClear = false
 
     var body: some View {
         Group {
@@ -16,6 +17,29 @@ struct AskView: View {
             }
         }
         .navigationTitle("Ask")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Button(role: .destructive) {
+                        confirmClear = true
+                    } label: {
+                        Label("Clear Chat", systemImage: "trash")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+                .disabled(model?.messages.isEmpty ?? true)
+                .accessibilityLabel("Chat options")
+            }
+        }
+        .confirmationDialog("Clear this conversation?", isPresented: $confirmClear, titleVisibility: .visible) {
+            Button("Clear Chat", role: .destructive) {
+                Task { await model?.clearChat() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Removes the messages in this chat. What EchoMind remembers about you (Settings ▸ Memory) is not affected.")
+        }
         .task {
             if model == nil {
                 let vm = AskViewModel(rag: dependencies.ragService, chat: dependencies.chatRepository,

@@ -34,6 +34,14 @@ final class AskViewModel {
         messages = display
     }
 
+    /// Wipe the conversation (history, follow-ups, and the persisted messages).
+    /// Long-term memory facts are untouched — those live in Settings ▸ Memory.
+    func clearChat() async {
+        guard state == .idle else { return }
+        try? await chat.deleteMessages(conversationId: conversationId)
+        messages = []
+    }
+
     func send() async {
         let question = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !question.isEmpty, state == .idle else { return }

@@ -21,6 +21,12 @@ actor SwiftDataChatRepository: ChatRepository {
         }
     }
 
+    func deleteMessages(conversationId: UUID) async throws {
+        try modelContext.delete(model: ChatMessage.self,
+                                where: #Predicate { $0.conversationId == conversationId })
+        try modelContext.save()
+    }
+
     func deleteAll() async throws {
         try modelContext.delete(model: ChatMessage.self)
         try modelContext.save()

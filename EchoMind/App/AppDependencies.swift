@@ -72,6 +72,27 @@ final class AppDependencies {
     /// F3: names sessions from their reports (shared by the pipeline + manual path).
     let sessionTitler: any SessionTitling
 
+    /// Effective AI availability: the device's Apple Intelligence status, upgraded
+    /// to `.tierA` when the router would serve via a downloaded local model.
+    /// Pipelines (reports, RAG) gate on THIS — "AI works" means either backend.
+    let effectiveAIAvailability: @Sendable () async -> AvailabilityStatus
+
+    /// True when a downloaded + selected local model can generate on this build.
+    var localModelReady: Bool {
+        #if canImport(MLXLLM)
+        return aiSettings.localModelID != nil
+        #else
+        return false
+        #endif
+    }
+    /// Synchronous UI hint: some generator (Apple FM or local) works right now.
+    var aiReady: Bool { availabilityMonitor.status == .tierA || localModelReady }
+    /// Tier B device, no local model, but the engine ships in this build → the UI
+    /// should recommend downloading a model instead of dead-ending on "AI off".
+    var suggestModelDownload: Bool {
+        availabilityMonitor.status != .tierA && !localModelReady && modelDownloader.engineLinked
+    }
+
     /// Mirrors `settingsStore.onboardingComplete` but observable, so flipping it
     /// on completion re-renders `RootView` without an async flash (§2.7).
     var onboardingComplete: Bool
@@ -152,6 +173,25 @@ final class AppDependencies {
                 }
             })
         self.modelGateway = routing
+        // Effective AI availability: the device's Apple Intelligence status, upgraded
+        // to tierA when the router would serve via a downloaded local model instead.
+        // Pipelines gate on THIS, so "AI works" means Apple FM *or* the local model —
+        // gating on raw device status made reports/Ask ignore a downloaded model.
+        let localLinked = localGateway != nil
+        let effectiveAvailability: @Sendable () async -> AvailabilityStatus = {
+            await MainActor.run {
+                let device = monitor.status
+                if device == .tierA { return device }
+                let backend = FeatureRouter().backend(
+                    availability: device,
+                    localModelID: localLinked ? aiSettings.localModelID : nil,
+                    preference: aiSettings.preference,
+                    thermal: ThermalLevel(processInfo: ProcessInfo.processInfo.thermalState))
+                if case .local = backend { return .tierA }
+                return device
+            }
+        }
+        self.effectiveAIAvailability = effectiveAvailability
         let summarizer = MapReduceSummarizer(gateway: routing, budgeter: budgeter)
         self.summarizer = summarizer
         let grouping = SessionGroupingService(
@@ -164,17 +204,17 @@ final class AppDependencies {
         self.sessionTitler = titler
         let report = ReportPipeline(
             sessions: sessionRepo, summarizer: summarizer,
-            availability: { await MainActor.run { monitor.status } },
+            availability: effectiveAvailability,
             grouping: grouping, distiller: distiller, continuity: continuity,
             titler: titler)
         self.reportGenerator = report
         self.reportReconciler = ReportReconciler(
             sessions: sessionRepo, reportGenerator: report,
-            availability: { await MainActor.run { monitor.status } })
+            availability: effectiveAvailability)
         self.ragService = RAGPipeline(
             chunks: chunkRepo, embedder: embedder, search: VectorSearch(),
             gateway: routing, budgeter: budgeter,
-            availability: { await MainActor.run { monitor.status } },
+            availability: effectiveAvailability,
             knownFacts: { ((try? await memoryStore.all()) ?? []).prefix(20).map(\.text) })
         let store = AppSettingsStore(container: container)
         self.settingsStore = store

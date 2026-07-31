@@ -11,22 +11,38 @@ final class HomeViewModel {
     private let repository: any SessionRepository
     private let memory: (any MemoryStore)?
     private let availability: (any AvailabilityProviding)?
+    /// True when a downloaded local model can generate (dual-mode AI).
+    private let localModelReady: () -> Bool
+    /// True when this device should be nudged to download a model.
+    private let suggestDownload: () -> Bool
 
     init(repository: any SessionRepository,
          memory: (any MemoryStore)? = nil,
-         availability: (any AvailabilityProviding)? = nil) {
+         availability: (any AvailabilityProviding)? = nil,
+         localModelReady: @escaping () -> Bool = { false },
+         suggestDownload: @escaping () -> Bool = { false }) {
         self.repository = repository
         self.memory = memory
         self.availability = availability
+        self.localModelReady = localModelReady
+        self.suggestDownload = suggestDownload
     }
 
-    /// Live AI status for the header pill.
+    /// Live AI status for the header pill. Dual-mode: Apple Intelligence when the
+    /// device has it, the downloaded on-device model otherwise, and a download
+    /// nudge when neither generator is available yet.
     var aiStatus: (title: String, ok: Bool) {
         switch availability?.status {
         case .tierA: return ("Apple Intelligence ready", true)
-        case .tierB, .none: return ("On-device · ready", false)
+        case .tierB, .none:
+            if localModelReady() { return ("On-device model active", true) }
+            if suggestDownload() { return ("AI off — download a model", false) }
+            return ("On-device · ready", false)
         }
     }
+
+    /// Show a tappable "enable AI" call-to-action row on the status card.
+    var showModelDownloadCTA: Bool { availability?.status != .tierA && suggestDownload() }
 
     func load() async {
         availability?.refresh()
