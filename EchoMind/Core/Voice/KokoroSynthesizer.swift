@@ -1,80 +1,78 @@
 import Foundation
 
-// Kokoro-82M TTS (Voice Agent V4) — the warm "af_heart" voice. Guarded on a
-// dedicated `FluidAudioTTS` module so that adding the FluidAudio *diarization*
-// package (M3) does NOT drag in a possibly-mismatched TTS API and break the build;
-// this activates only when the TTS product is explicitly linked. AVSpeechSynthesizer
-// stays the floor whenever Kokoro weights aren't downloaded/linked.
+// Kokoro TTS (Voice Agent V4) — the warm "af_heart" voice, via FluidAudio's
+// KokoroAneManager (7-stage CoreML chain with ANE/GPU assignment). Compiled only
+// when the FluidAudio package is linked; AVSpeechSynthesizer stays the floor
+// whenever Kokoro isn't downloaded + selected, so voice output always works.
 //
-// Add in Xcode: the FluidAudio TTS product (verify exact module name at add time —
-// this space moves fast) OR an mlx-audio Kokoro package. Reconcile `synthesize`
-// against the installed API — that's the single package-specific call.
+// The Model Manager (Settings ▸ On-Device AI ▸ Voice) prefetches the CoreML chain
+// consent-gated; `initialize()` here then loads from that cache (re-downloading
+// only if the OS evicted it — covered by the user's original download consent).
+//
+// Known OS caveat (surfaced by the package itself): iOS 26.4–26.5.x has an Apple
+// BNNS bug that can intermittently crash Kokoro synthesis; fixed in 26.6.
 
-#if canImport(FluidAudioTTS)
-import FluidAudioTTS
+#if canImport(FluidAudio)
+import FluidAudio
 import AVFoundation
 
 @MainActor
-final class KokoroSynthesizer: SpeechSynthesizing {
+final class KokoroSynthesizer: NSObject, SpeechSynthesizing {
     private let model: LocalModel
-    private var engine: KokoroTTS?
-    private let player = AVAudioPlayerNode()
-    private let audioEngine = AVAudioEngine()
+    private let manager = KokoroAneManager(variant: .english)
+    private var initialized = false
+    private var player: AVAudioPlayer?
     private var continuation: CheckedContinuation<Void, Never>?
 
-    init(model: LocalModel) { self.model = model }
+    init(model: LocalModel) {
+        self.model = model
+        super.init()
+    }
 
     nonisolated var isAvailable: Bool { true }
 
     func speak(_ text: String) async {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        stop()
+        stop()   // never overlap utterances
         do {
-            let buffer = try await synthesize(trimmed)
+            if !initialized {
+                try await manager.initialize()
+                initialized = true
+            }
+            // nil voice → the English variant's default (the warm "af_heart").
+            let wav = try await manager.synthesize(text: trimmed, voice: nil)
+            guard !Task.isCancelled else { return }
             try? AVAudioSession.sharedInstance().setCategory(.playback, options: [.duckOthers])
             try? AVAudioSession.sharedInstance().setActive(true)
-            await play(buffer)
+            let player = try AVAudioPlayer(data: wav)
+            player.delegate = self
+            self.player = player
+            await withCheckedContinuation { continuation in
+                self.continuation = continuation
+                if !player.play() { resume() }
+            }
         } catch {
-            // Best-effort: a synthesis failure just produces no audio for this turn.
+            // Best-effort: a synthesis failure just produces no audio for this
+            // sentence; the controller moves on to the next one.
         }
     }
 
     func stop() {
-        player.stop()
+        player?.stop()
+        player = nil
         resume()
-    }
-
-    // FIXME(package): reconcile with the installed Kokoro API. Expected shape:
-    // load once, then render text → an AVAudioPCMBuffer of "af_heart" speech.
-    private func synthesize(_ text: String) async throws -> AVAudioPCMBuffer {
-        let engine = try await ensureEngine()
-        return try await engine.render(text: text, voice: "af_heart")
-    }
-
-    private func ensureEngine() async throws -> KokoroTTS {
-        if let engine { return engine }
-        let created = try await KokoroTTS.load(repoID: model.huggingFaceRepo)
-        engine = created
-        return created
-    }
-
-    private func play(_ buffer: AVAudioPCMBuffer) async {
-        audioEngine.attach(player)
-        audioEngine.connect(player, to: audioEngine.mainMixerNode, format: buffer.format)
-        try? audioEngine.start()
-        await withCheckedContinuation { continuation in
-            self.continuation = continuation
-            player.scheduleBuffer(buffer) { [weak self] in
-                Task { @MainActor in self?.resume() }
-            }
-            player.play()
-        }
     }
 
     private func resume() {
         continuation?.resume()
         continuation = nil
+    }
+}
+
+extension KokoroSynthesizer: AVAudioPlayerDelegate {
+    nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+        Task { @MainActor in self.resume() }
     }
 }
 #endif

@@ -13,6 +13,7 @@
 		AA10000000000000000000C4 /* MLXHuggingFace in Frameworks */ = {isa = PBXBuildFile; productRef = AA10000000000000000000B4 /* MLXHuggingFace */; };
 		AA10000000000000000000C5 /* HuggingFace in Frameworks */ = {isa = PBXBuildFile; productRef = AA10000000000000000000B5 /* HuggingFace */; };
 		AA10000000000000000000C6 /* Tokenizers in Frameworks */ = {isa = PBXBuildFile; productRef = AA10000000000000000000B6 /* Tokenizers */; };
+		AA10000000000000000000C7 /* FluidAudio in Frameworks */ = {isa = PBXBuildFile; productRef = AA10000000000000000000B7 /* FluidAudio */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -80,6 +81,7 @@
 				AA10000000000000000000C4 /* MLXHuggingFace in Frameworks */,
 				AA10000000000000000000C5 /* HuggingFace in Frameworks */,
 				AA10000000000000000000C6 /* Tokenizers in Frameworks */,
+				AA10000000000000000000C7 /* FluidAudio in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -146,6 +148,7 @@
 				AA10000000000000000000B4 /* MLXHuggingFace */,
 				AA10000000000000000000B5 /* HuggingFace */,
 				AA10000000000000000000B6 /* Tokenizers */,
+				AA10000000000000000000B7 /* FluidAudio */,
 			);
 			productName = EchoMind;
 			productReference = D4CA11842FFC5CA900A0C241 /* EchoMind.app */;
@@ -232,6 +235,7 @@
 				AA10000000000000000000A1 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */,
 				AA10000000000000000000A2 /* XCRemoteSwiftPackageReference "swift-huggingface" */,
 				AA10000000000000000000A3 /* XCRemoteSwiftPackageReference "swift-transformers" */,
+				AA10000000000000000000A4 /* XCRemoteSwiftPackageReference "FluidAudio" */,
 			);
 			minimizedProjectReferenceProxies = 1;
 			preferredProjectObjectVersion = 77;
@@ -646,6 +650,14 @@
 				minimumVersion = 1.0.0;
 			};
 		};
+		AA10000000000000000000A4 /* XCRemoteSwiftPackageReference "FluidAudio" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/FluidInference/FluidAudio";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -678,6 +690,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = AA10000000000000000000A3 /* XCRemoteSwiftPackageReference "swift-transformers" */;
 			productName = Tokenizers;
+		};
+		AA10000000000000000000B7 /* FluidAudio */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AA10000000000000000000A4 /* XCRemoteSwiftPackageReference "FluidAudio" */;
+			productName = FluidAudio;
 		};
 /* End XCSwiftPackageProductDependency section */
 

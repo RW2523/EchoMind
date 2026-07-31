@@ -12,6 +12,9 @@ import MLXLMCommon
 import MLXHuggingFace
 import HuggingFace
 import Tokenizers
+#if canImport(FluidAudio)
+import FluidAudio
+#endif
 
 nonisolated struct MLXModelDownloader: ModelDownloadService {
     var engineLinked: Bool { true }
@@ -23,6 +26,24 @@ nonisolated struct MLXModelDownloader: ModelDownloadService {
     }
 
     func download(_ model: LocalModel, onProgress: @escaping @Sendable (Double) -> Void) async throws {
+        // Voice (Kokoro): the weights are FluidAudio's CoreML chain, not MLX
+        // tensors — prefetch through its own store so playback later is offline.
+        if model.kind == .tts {
+            #if canImport(FluidAudio)
+            do {
+                try await KokoroAneManager(variant: .english).initialize()
+                try ModelStorage.mark(model)
+                onProgress(1.0)
+                return
+            } catch is CancellationError {
+                throw ModelDownloadError.cancelled
+            } catch {
+                throw ModelDownloadError.failed(String(describing: error))
+            }
+            #else
+            throw ModelDownloadError.failed("The voice engine isn't linked in this build.")
+            #endif
+        }
         do {
             let configuration = ModelConfiguration(id: model.huggingFaceRepo)
             _ = try await LLMModelFactory.shared.loadContainer(

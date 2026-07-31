@@ -17,13 +17,15 @@ actor FluidAudioDiarizer: DiarizationService {
     nonisolated var isAvailable: Bool { true }
     private var manager: DiarizerManager?
 
-    func diarize(audioURL: URL) async throws -> DiarizationResult {
+    // Qualified as `EchoMind.DiarizationResult`: FluidAudio exports a type of the
+    // same name, and inside this file the bare name is ambiguous.
+    func diarize(audioURL: URL) async throws -> EchoMind.DiarizationResult {
         let samples = try Self.loadMono16k(audioURL)
         guard !samples.isEmpty else { return .empty }
         let manager = try await ensureManager()
         do {
-            let raw = try await manager.performCompleteDiarization(samples, sampleRate: 16_000)
-            return DiarizationResult(segments: Self.normalize(raw.segments))
+            let raw = try manager.performCompleteDiarization(samples, sampleRate: 16_000)
+            return EchoMind.DiarizationResult(segments: Self.normalize(raw.segments))
         } catch {
             throw DiarizationError.failed(String(describing: error))
         }
@@ -31,8 +33,11 @@ actor FluidAudioDiarizer: DiarizationService {
 
     private func ensureManager() async throws -> DiarizerManager {
         if let manager { return manager }
+        // Models download on first use (user-initiated via "Identify Speakers"),
+        // then load from the on-device cache.
+        let models = try await DiarizerModels.downloadIfNeeded()
         let created = DiarizerManager()
-        try await created.initialize()      // loads/downloads the Core ML models
+        created.initialize(models: models)
         manager = created
         return created
     }

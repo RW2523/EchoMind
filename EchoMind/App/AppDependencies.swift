@@ -203,7 +203,7 @@ final class AppDependencies {
         case .systemAV:
             return SystemSpeechSynthesizer()
         case .kokoro(let id):
-            #if canImport(FluidAudioTTS)
+            #if canImport(FluidAudio)
             if let model = LocalModelCatalog.model(id: id) { return KokoroSynthesizer(model: model) }
             #endif
             return SystemSpeechSynthesizer()
@@ -224,7 +224,7 @@ final class AppDependencies {
     }
 
     private static var ttsPackageLinked: Bool {
-        #if canImport(FluidAudioTTS)
+        #if canImport(FluidAudio)
         return true
         #else
         return false
