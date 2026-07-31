@@ -41,6 +41,10 @@ actor SwiftDataChunkRepository: ChunkRepository {
         try modelContext.save()
     }
 
+    func count() async throws -> Int {
+        try modelContext.fetchCount(FetchDescriptor<KnowledgeChunk>())
+    }
+
     func deleteAll() async throws {
         try modelContext.delete(model: KnowledgeChunk.self)
         try modelContext.save()

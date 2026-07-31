@@ -27,7 +27,7 @@ import Foundation
         let suite = RetrievalEval.handbookSuite()
         let plain = try await eval.score(chunks: suite.chunks, cases: suite.cases, k: 3)
         let reranked = try await eval.score(chunks: suite.chunks, cases: suite.cases, k: 3,
-                                            reranker: MMRReranker(lambda: RAGPipeline.mmrLambda))
+                                            reranker: MMRReranker(lambda: HybridRetriever.mmrLambda))
         #expect(reranked.score >= plain.score,
                 "MMR regressed recall: \(reranked.hits)/\(reranked.total) vs plain \(plain.hits)/\(plain.total)")
     }

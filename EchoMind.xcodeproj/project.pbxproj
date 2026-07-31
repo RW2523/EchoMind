@@ -231,13 +231,13 @@
 				Base,
 			);
 			mainGroup = D4CA117B2FFC5CA900A0C241;
+			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				AA10000000000000000000A1 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */,
 				AA10000000000000000000A2 /* XCRemoteSwiftPackageReference "swift-huggingface" */,
 				AA10000000000000000000A3 /* XCRemoteSwiftPackageReference "swift-transformers" */,
 				AA10000000000000000000A4 /* XCRemoteSwiftPackageReference "FluidAudio" */,
 			);
-			minimizedProjectReferenceProxies = 1;
 			preferredProjectObjectVersion = 77;
 			productRefGroup = D4CA11852FFC5CA900A0C241 /* Products */;
 			projectDirPath = "";
@@ -625,7 +625,8 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
-	/* Begin XCRemoteSwiftPackageReference section */
+
+/* Begin XCRemoteSwiftPackageReference section */
 		AA10000000000000000000A1 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/ml-explore/mlx-swift-lm";
@@ -697,7 +698,6 @@
 			productName = FluidAudio;
 		};
 /* End XCSwiftPackageProductDependency section */
-
 	};
 	rootObject = D4CA117C2FFC5CA900A0C241 /* Project object */;
 }

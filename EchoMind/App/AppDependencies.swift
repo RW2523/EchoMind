@@ -34,6 +34,8 @@ final class AppDependencies {
     let documentImporter: any DocumentImportService
     let embeddingService: any EmbeddingService
     let vectorSearch: VectorSearch
+    /// RAG 2.0: decoded retrieval corpus, cached between questions.
+    let corpusCache: CorpusCache
     let indexer: any IndexerService
     let chatRepository: any ChatRepository
     let ragService: any RAGService
@@ -125,8 +127,13 @@ final class AppDependencies {
         let embedder = Self.makeEmbedder(choice: embedderChoice)
         self.embeddingService = embedder
         self.vectorSearch = VectorSearch()
+        // RAG 2.0: the decoded corpus is cached between questions; index writes
+        // invalidate it (the count probe inside covers deletes/wipes).
+        let corpus = CorpusCache(chunks: chunkRepo, dimension: { try await embedder.dimension })
+        self.corpusCache = corpus
         self.indexer = RAGIndexer(documents: docRepository, sessions: sessionRepo,
-                                  chunks: chunkRepo, embedder: embedder)
+                                  chunks: chunkRepo, embedder: embedder,
+                                  onIndexChanged: { await corpus.invalidate() })
         let chatRepo = SwiftDataChatRepository(modelContainer: container)
         self.chatRepository = chatRepo
         let memoryStore = SwiftDataMemoryStore(modelContainer: container)
@@ -212,7 +219,7 @@ final class AppDependencies {
             sessions: sessionRepo, reportGenerator: report,
             availability: effectiveAvailability)
         self.ragService = RAGPipeline(
-            chunks: chunkRepo, embedder: embedder, search: VectorSearch(),
+            corpus: corpus, embedder: embedder, search: VectorSearch(),
             gateway: routing, budgeter: budgeter,
             availability: effectiveAvailability,
             knownFacts: { ((try? await memoryStore.all()) ?? []).prefix(20).map(\.text) })

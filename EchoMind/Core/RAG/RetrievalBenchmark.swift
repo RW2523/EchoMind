@@ -142,13 +142,13 @@ nonisolated struct RetrievalBenchmark {
                       candidates: [(id: UUID, vector: [Float])],
                       documents: [(id: UUID, text: String)]) -> [UUID] {
         let vectorRanking = search.topK(query: queryVector, candidates: candidates,
-                                        k: RAGPipeline.fusionPoolK).map(\.id)
+                                        k: HybridRetriever.fusionPoolK).map(\.id)
         let bm25Ranking = BM25().rank(query: query, documents: documents,
-                                      k: RAGPipeline.fusionPoolK).map(\.id)
+                                      k: HybridRetriever.fusionPoolK).map(\.id)
         let fused = BM25.reciprocalRankFusion([vectorRanking, bm25Ranking])
         let fusedIDs = fused.map(\.id)
 
-        let pool = Array(fused.prefix(RAGPipeline.mmrPoolK))
+        let pool = Array(fused.prefix(HybridRetriever.mmrPoolK))
         let vecById = Dictionary(candidates.map { ($0.id, $0.vector) }, uniquingKeysWith: { first, _ in first })
         let mmrInput = pool.compactMap { item in vecById[item.id].map { (id: item.id, vector: $0) } }
 
@@ -156,7 +156,7 @@ nonisolated struct RetrievalBenchmark {
         var seen = Set<UUID>()
         if mmrInput.count >= 2 {
             // MMR over the pool; greedy MMR's prefix matches production's top-retrieveK.
-            let mmr = MMRReranker(lambda: RAGPipeline.mmrLambda)
+            let mmr = MMRReranker(lambda: HybridRetriever.mmrLambda)
                 .rerank(query: queryVector, candidates: mmrInput, k: min(evalDepth, mmrInput.count))
             for id in mmr where !seen.contains(id) { ordered.append(id); seen.insert(id) }
         }

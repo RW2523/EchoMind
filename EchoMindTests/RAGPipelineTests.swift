@@ -21,10 +21,11 @@ import SwiftData
 
     private func pipeline(chunks: any ChunkRepository, gateway: MockModelGateway,
                           availability: @escaping @Sendable () async -> AvailabilityStatus = { .tierA }) -> RAGPipeline {
-        RAGPipeline(chunks: chunks,
-                    embedder: MockEmbeddingService(dim: 3, map: { _ in [1, 0, 0] }),
-                    search: VectorSearch(), gateway: gateway, budgeter: TokenBudgeter(),
-                    availability: availability)
+        let embedder = MockEmbeddingService(dim: 3, map: { _ in [1, 0, 0] })
+        return RAGPipeline(corpus: CorpusCache(chunks: chunks, dimension: { try await embedder.dimension }),
+                           embedder: embedder,
+                           search: VectorSearch(), gateway: gateway, budgeter: TokenBudgeter(),
+                           availability: availability)
     }
 
     @Test func emptyKnowledgeAnswersConversationallyWithFollowUps() async throws {

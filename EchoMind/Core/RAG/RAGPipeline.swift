@@ -42,17 +42,27 @@ extension AskResult {
 nonisolated enum RAGPrompts {
     static let hybrid = """
     You are EchoMind, a friendly, concise assistant. Below is the conversation so \
-    far and Context passages from the user's own saved knowledge (which may be \
-    empty). If the Context is relevant to the latest message, answer using it and \
-    set usedProvidedContext to true, preserving names, numbers, and dates verbatim. \
-    Otherwise answer naturally and set usedProvidedContext to false. Always suggest \
-    two or three short follow-up questions.
+    far and numbered Context passages [1], [2], … from the user's own saved \
+    knowledge (which may be empty). If the Context is relevant to the latest \
+    message, answer using it, set usedProvidedContext to true, preserve names, \
+    numbers, and dates verbatim, and list the passage numbers you used in \
+    citedPassages. Only cite passages that directly support your answer. \
+    Otherwise answer naturally, set usedProvidedContext to false, and leave \
+    citedPassages empty. Always suggest two or three short follow-up questions.
     """
 
     static let rewrite = """
     Rewrite the user's latest message into a single standalone search query using \
     the conversation for context (resolve pronouns like "it" or "they"). Output ONLY \
     the query text, nothing else.
+    """
+
+    /// Adaptive multi-query expansion (used only when the first retrieval pass is
+    /// weak): alternative phrasings widen recall over the user's own wording.
+    static let expand = """
+    Rewrite the search query two different ways — use synonyms and related phrasing \
+    someone might have used when speaking. Output ONLY the two rewrites, one per \
+    line, nothing else.
     """
 
     /// Voice answers are spoken aloud: concise plain prose, no markdown, no lists,
@@ -78,9 +88,7 @@ nonisolated enum RAGPrompts {
 /// query rewrite + vector∪BM25 (RRF) retrieval + one guided call returning the
 /// answer, a grounded flag, and follow-up suggestions.
 nonisolated struct RAGPipeline: RAGService {
-    let chunks: any ChunkRepository
-    let embedder: any EmbeddingService
-    let search: VectorSearch
+    let retriever: HybridRetriever
     let gateway: any ModelGateway
     let budgeter: TokenBudgeter
     let availability: @Sendable () async -> AvailabilityStatus
@@ -93,43 +101,76 @@ nonisolated struct RAGPipeline: RAGService {
     static let questionTokenLimit = 250
     static let outputReserve = 1_000
     static let retrieveK = 6
-    static let fusionPoolK = 20
-    static let mmrPoolK = 12
-    static let mmrLambda: Float = 0.7
     static let memoryTurns = 6
     static let factsBudget = 300
+
+    /// Composes the retrieval engine over the cached corpus, with adaptive
+    /// query expansion routed through the same model gateway.
+    init(corpus: CorpusCache, embedder: any EmbeddingService, search: VectorSearch,
+         gateway: any ModelGateway, budgeter: TokenBudgeter,
+         availability: @escaping @Sendable () async -> AvailabilityStatus,
+         knownFacts: (@Sendable () async -> [String])? = nil) {
+        self.retriever = HybridRetriever(
+            corpus: corpus, embedder: embedder, search: search,
+            expand: { query in await Self.expandQueries(gateway: gateway, query: query) })
+        self.gateway = gateway
+        self.budgeter = budgeter
+        self.availability = availability
+        self.knownFacts = knownFacts
+    }
+
+    /// Everything both answer paths need from one retrieval pass.
+    struct Retrieval: Sendable {
+        let retrieved: [RetrievedChunk]
+        let packed: [RetrievedChunk]
+        let memory: String
+        let context: String
+    }
+
+    /// Shared by `ask` and `askStreaming` (previously duplicated): rewrite →
+    /// hybrid retrieve (cached corpus, adaptive expansion) → budget-pack →
+    /// numbered context block.
+    func retrieveContext(question: String, history: [ChatTurn]) async throws -> Retrieval {
+        let searchQuery = history.isEmpty ? question : await rewrite(question, history: history)
+        let retrieved = try await retriever.retrieve(searchQuery, k: Self.retrieveK)
+        let memory = Self.memory(from: history)
+        let packed = packChunks(retrieved, question: question, memory: memory)
+        let context = packed.enumerated()
+            .map { "[\($0.offset + 1)] \($0.element.chunk.text)" }
+            .joined(separator: "\n\n")
+        return Retrieval(retrieved: retrieved, packed: packed, memory: memory, context: context)
+    }
 
     func ask(_ question: String, history: [ChatTurn]) async throws -> AskResult {
         let trimmed = question.trimmingCharacters(in: .whitespacesAndNewlines)
         guard budgeter.tokens(in: trimmed) <= Self.questionTokenLimit else { throw RAGError.questionTooLong }
 
         let status = await availability()
-        let stored = try await chunks.fetchAll()
-        let searchQuery = history.isEmpty ? trimmed : await rewrite(trimmed, history: history)
+        let retrieval = try await retrieveContext(question: trimmed, history: history)
 
         // Tier B: no generation — return passages honestly.
         if case .tierB(let reason) = status {
-            let retrieved = stored.isEmpty ? [] : try await hybridRetrieve(searchQuery, from: stored)
-            return .retrievalOnly(passages: retrieved, reason: .tierB(Self.reasonText(reason)))
+            return .retrievalOnly(passages: retrieval.retrieved, reason: .tierB(Self.reasonText(reason)))
         }
 
-        // Tier A: one unified guided call — grounds if the context is relevant,
-        // chats otherwise; always returns follow-ups.
-        let retrieved = stored.isEmpty ? [] : try await hybridRetrieve(searchQuery, from: stored)
-        let memory = Self.memory(from: history)
+        // One unified guided call — grounds (with citations) if the context is
+        // relevant, chats otherwise; always returns follow-ups.
         let facts = await factsBlock()
-        let packed = packChunks(retrieved, question: trimmed, memory: memory)
         do {
-            return try await answer(question: trimmed, memory: memory, facts: facts, packed: packed)
+            return try await answer(question: trimmed, retrieval: retrieval, facts: facts,
+                                    packed: retrieval.packed)
         } catch ModelGatewayError.exceededContextWindow {
-            guard packed.count > 1 else { return .retrievalOnly(passages: retrieved, reason: .contextOverflow) }
+            guard retrieval.packed.count > 1 else {
+                return .retrievalOnly(passages: retrieval.retrieved, reason: .contextOverflow)
+            }
             do {
-                return try await answer(question: trimmed, memory: memory, facts: facts, packed: Array(packed.dropLast()))
+                return try await answer(question: trimmed, retrieval: retrieval, facts: facts,
+                                        packed: Array(retrieval.packed.dropLast()))
             } catch {
-                return .retrievalOnly(passages: retrieved, reason: .contextOverflow)
+                return .retrievalOnly(passages: retrieval.retrieved, reason: .contextOverflow)
             }
         } catch {
-            return .retrievalOnly(passages: retrieved, reason: .generationFailed)
+            return .retrievalOnly(passages: retrieval.retrieved, reason: .generationFailed)
         }
     }
 
@@ -141,24 +182,61 @@ nonisolated struct RAGPipeline: RAGService {
 
     // MARK: - Generation
 
-    private func answer(question: String, memory: String, facts: String, packed: [RetrievedChunk]) async throws -> AskResult {
+    private func answer(question: String, retrieval: Retrieval, facts: String,
+                        packed: [RetrievedChunk]) async throws -> AskResult {
         let context = packed.enumerated()
             .map { "[\($0.offset + 1)] \($0.element.chunk.text)" }
             .joined(separator: "\n\n")
         let result = try await gateway.generate(
             instructions: RAGPrompts.hybrid,
-            prompt: RAGPrompts.prompt(memory: memory, question: question, context: context, knownFacts: facts),
+            prompt: RAGPrompts.prompt(memory: retrieval.memory, question: question,
+                                      context: context, knownFacts: facts),
             as: RAGAnswer.self,
             maxOutputTokens: Self.outputReserve)
         let text = result.answer.trimmingCharacters(in: .whitespacesAndNewlines)
         let followUps = Array(result.followUps.prefix(3))
         if result.usedProvidedContext && !packed.isEmpty {
-            let sources = packed.map {
-                SourceRef(sourceId: $0.chunk.sourceId, sourceType: $0.chunk.sourceType, chunkId: $0.chunk.id)
-            }
-            return .grounded(answer: text, sources: sources, followUps: followUps)
+            return .grounded(answer: text,
+                             sources: Self.citedSources(result.citedPassages, packed: packed),
+                             followUps: followUps)
         }
         return .conversational(answer: text, followUps: followUps)
+    }
+
+    /// Map the model's cited passage numbers (1-based) to the exact chunks behind
+    /// them — RAGFlow-style precision: sources ARE the passages that back the
+    /// answer, in citation order. Invalid/duplicate numbers are dropped; if the
+    /// model cited nothing usable, fall back to every packed passage so a grounded
+    /// answer never ships without sources.
+    static func citedSources(_ cited: [Int], packed: [RetrievedChunk]) -> [SourceRef] {
+        var seen = Set<Int>()
+        let valid = cited.filter { $0 >= 1 && $0 <= packed.count && seen.insert($0).inserted }
+        let indices = valid.isEmpty ? Array(1...packed.count) : valid
+        return indices.map { index in
+            let chunk = packed[index - 1].chunk
+            return SourceRef(sourceId: chunk.sourceId, sourceType: chunk.sourceType, chunkId: chunk.id)
+        }
+    }
+
+    /// Adaptive expansion (weak retrieval only): two alternative phrasings from
+    /// the model, parsed line-by-line. Failure → no expansion, never an error.
+    static func expandQueries(gateway: any ModelGateway, query: String) async -> [String] {
+        let raw = try? await gateway.respond(
+            instructions: RAGPrompts.expand,
+            prompt: query,
+            maxOutputTokens: 60)
+        guard let raw else { return [] }
+        return raw.split(separator: "\n")
+            .map { line -> String in
+                var text = line.trimmingCharacters(in: .whitespaces)
+                // Strip list markers the model may add: "1. ", "2) ", "- ", "• "
+                while let first = text.first,
+                      first.isNumber || first == "." || first == ")" || first == "-" || first == "•" || first == " " {
+                    text.removeFirst()
+                }
+                return text.trimmingCharacters(in: .whitespaces)
+            }
+            .filter { !$0.isEmpty }
     }
 
     private func rewrite(_ question: String, history: [ChatTurn]) async -> String {
@@ -167,51 +245,6 @@ nonisolated struct RAGPipeline: RAGService {
         let rewritten = try? await gateway.respond(instructions: RAGPrompts.rewrite, prompt: prompt, maxOutputTokens: 60)
         let cleaned = rewritten?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return cleaned.isEmpty ? question : cleaned
-    }
-
-    // MARK: - Hybrid retrieval
-
-    private func hybridRetrieve(_ query: String, from stored: [ChunkSnapshot]) async throws -> [RetrievedChunk] {
-        let dimension = try await embedder.dimension
-        guard let queryVector = try await embedder.embed([query]).first else { return [] }
-
-        let vectorCandidates: [(id: UUID, vector: [Float])] = stored.compactMap { chunk in
-            guard let vector = try? VectorPacking.unpack(chunk.embedding, expectedDimension: dimension) else { return nil }
-            return (chunk.id, vector)
-        }
-        let vectorRanking = search.topK(query: queryVector, candidates: vectorCandidates, k: Self.fusionPoolK).map(\.id)
-        let bm25Ranking = BM25().rank(query: query, documents: stored.map { (id: $0.id, text: $0.text) },
-                                      k: Self.fusionPoolK).map(\.id)
-
-        let byId = Dictionary(stored.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-        let fused = BM25.reciprocalRankFusion([vectorRanking, bm25Ranking])
-        let ordered = mmrOrder(fused: fused, queryVector: queryVector, vectors: vectorCandidates)
-        let scoreById = Dictionary(fused.map { ($0.id, $0.score) }, uniquingKeysWith: { first, _ in first })
-        return ordered.compactMap { id in
-            byId[id].map { RetrievedChunk(chunk: $0, score: Float(scoreById[id] ?? 0)) }
-        }
-    }
-
-    /// MMR-rerank the fused pool for diversity, then take `retrieveK`. Fused
-    /// candidates that came from BM25 only (no usable vector) are appended in fused
-    /// order so exact keyword hits are never dropped by the diversity pass.
-    private func mmrOrder(fused: [(id: UUID, score: Double)],
-                          queryVector: [Float],
-                          vectors: [(id: UUID, vector: [Float])]) -> [UUID] {
-        let pool = Array(fused.prefix(Self.mmrPoolK))
-        let vecById = Dictionary(vectors.map { ($0.id, $0.vector) }, uniquingKeysWith: { first, _ in first })
-        let mmrInput = pool.compactMap { item in vecById[item.id].map { (id: item.id, vector: $0) } }
-        guard mmrInput.count >= 2 else { return pool.prefix(Self.retrieveK).map(\.id) }
-
-        var picked = MMRReranker(lambda: Self.mmrLambda)
-            .rerank(query: queryVector, candidates: mmrInput, k: Self.retrieveK)
-        var seen = Set(picked)
-        for item in pool where !seen.contains(item.id) {
-            guard picked.count < Self.retrieveK else { break }
-            picked.append(item.id)
-            seen.insert(item.id)
-        }
-        return picked
     }
 
     // MARK: - Budget + memory
@@ -267,16 +300,11 @@ extension RAGPipeline: StreamingRAGService {
                         continuation.finish()
                         return
                     }
-                    let stored = try await chunks.fetchAll()
-                    let searchQuery = history.isEmpty ? trimmed : await rewrite(trimmed, history: history)
-                    let retrieved = stored.isEmpty ? [] : try await hybridRetrieve(searchQuery, from: stored)
-                    let memory = Self.memory(from: history)
-                    let packed = packChunks(retrieved, question: trimmed, memory: memory)
-                    let context = packed.enumerated()
-                        .map { "[\($0.offset + 1)] \($0.element.chunk.text)" }
-                        .joined(separator: "\n\n")
+                    // Same retrieval as ask() — one shared implementation.
+                    let retrieval = try await retrieveContext(question: trimmed, history: history)
                     let facts = await factsBlock()
-                    let prompt = RAGPrompts.prompt(memory: memory, question: trimmed, context: context, knownFacts: facts)
+                    let prompt = RAGPrompts.prompt(memory: retrieval.memory, question: trimmed,
+                                                   context: retrieval.context, knownFacts: facts)
 
                     let source = (gateway as? StreamingModelGateway)?
                         .stream(instructions: RAGPrompts.voiceProse, prompt: prompt, maxOutputTokens: Self.outputReserve)

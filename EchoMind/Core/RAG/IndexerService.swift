@@ -25,17 +25,23 @@ actor RAGIndexer: IndexerService {
     private let chunks: any ChunkRepository
     private let embedder: any EmbeddingService
     private let chunker: any TextChunking
+    /// RAG 2.0: notifies the retrieval corpus cache after any index write. The
+    /// cache's row-count probe misses same-count reindexes (rebuilds), so writes
+    /// must invalidate explicitly.
+    private let onIndexChanged: (@Sendable () async -> Void)?
 
     init(documents: any DocumentRepository,
          sessions: any SessionRepository,
          chunks: any ChunkRepository,
          embedder: any EmbeddingService,
-         chunker: any TextChunking = TextChunker()) {
+         chunker: any TextChunking = TextChunker(),
+         onIndexChanged: (@Sendable () async -> Void)? = nil) {
         self.documents = documents
         self.sessions = sessions
         self.chunks = chunks
         self.embedder = embedder
         self.chunker = chunker
+        self.onIndexChanged = onIndexChanged
         (events, eventContinuation) = AsyncStream<IndexingEvent>.makeStream()
     }
 
@@ -50,6 +56,7 @@ actor RAGIndexer: IndexerService {
                                            pageBreaks: pageBreaks, sourceId: id)
             try await embedAndStore(textChunks, sourceId: id)
             try await documents.updateStatus(id: id, status: .ready)
+            await onIndexChanged?()
             eventContinuation.yield(.finished(sourceId: id))
         } catch {
             try? await documents.updateStatus(id: id, status: .failed)
@@ -66,6 +73,7 @@ actor RAGIndexer: IndexerService {
             let tuples = segments.map { (text: $0.text, startTime: $0.startTime) }
             let textChunks = chunker.chunk(segments: tuples, sourceId: id)
             try await embedAndStore(textChunks, sourceId: id)
+            await onIndexChanged?()
             eventContinuation.yield(.finished(sourceId: id))
         } catch {
             eventContinuation.yield(.failed(sourceId: id, message: String(describing: error)))
@@ -83,6 +91,7 @@ actor RAGIndexer: IndexerService {
             try Task.checkCancellation()
             try? await indexSession(id: session.id)
         }
+        await onIndexChanged?()
     }
 
     // MARK: - Helpers
