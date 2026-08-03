@@ -12,6 +12,13 @@ protocol SpeechSynthesizing {
     /// Speaks `text`, returning when the utterance finishes OR is stopped.
     func speak(_ text: String) async
     func stop()
+    /// Optional warm-up (load models/voices) so the FIRST spoken reply isn't
+    /// stalled behind initialization. Default: no-op.
+    func prepare() async
+}
+
+extension SpeechSynthesizing {
+    func prepare() async {}
 }
 
 /// AVSpeechSynthesizer implementation. Bridges the delegate's finish/cancel

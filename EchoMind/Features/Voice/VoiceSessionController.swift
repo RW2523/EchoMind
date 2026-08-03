@@ -66,6 +66,9 @@ final class VoiceSessionController {
     /// Begin capturing speech and streaming partial transcripts to the UI.
     func startListening() async {
         guard state == .idle else { return }
+        // Warm the TTS while the user is still talking — the first reply then
+        // starts speaking immediately instead of stalling behind model load.
+        Task { await synthesizer.prepare() }
         partialTranscript = ""
         do {
             let partials = try await input.start()
@@ -168,6 +171,7 @@ final class VoiceSessionController {
     /// Enter continuous conversation: listen → auto-endpoint → answer → listen …
     func startConversation() async {
         guard state == .idle else { return }
+        Task { await synthesizer.prepare() }   // warm TTS during the first turn
         handsFree = true
         await beginListenTurn()
     }

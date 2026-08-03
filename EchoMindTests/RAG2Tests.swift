@@ -105,6 +105,19 @@ import SwiftData
         #expect(RAGPipeline.citedSources([2, 9], packed: chunks).count == 1)   // 9 dropped, [2] kept
     }
 
+    @Test func rewriteSkippedForStandaloneQuestions() {
+        // Standalone questions must NOT pay the rewrite LLM round-trip (voice latency).
+        #expect(!RAGPipeline.needsRewrite("what is the refund policy for customers"))
+        #expect(!RAGPipeline.needsRewrite("who leads the security team at the company"))
+    }
+
+    @Test func rewriteKeptForContextDependentQuestions() {
+        #expect(RAGPipeline.needsRewrite("why?"))                        // too short
+        #expect(RAGPipeline.needsRewrite("what did they decide about it"))  // pronouns
+        #expect(RAGPipeline.needsRewrite("when does that ship to customers"))
+        #expect(RAGPipeline.needsRewrite("and his budget approval for the quarter"))
+    }
+
     @Test func expansionParsingStripsListMarkers() async {
         let gateway = MockModelGateway(respondReturn: "1. phoenix release date\n- when does phoenix ship")
         let expanded = await RAGPipeline.expandQueries(gateway: gateway, query: "phoenix launch")

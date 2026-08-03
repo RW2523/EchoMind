@@ -55,6 +55,9 @@ struct AskView: View {
                 voice = VoiceSessionController(input: input, synthesizer: dependencies.makeSpeechSynthesizer(),
                                                onQuestion: { question in await vm.askVoice(question) },
                                                onQuestionStream: { question in vm.askVoiceStream(question) })
+                // Load the generator (local MLX weights / Apple FM session) in the
+                // background so the first voice answer doesn't pay the cold start.
+                dependencies.prewarmVoiceStack()
             }
         }
     }

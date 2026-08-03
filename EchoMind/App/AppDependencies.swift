@@ -232,6 +232,21 @@ final class AppDependencies {
                                          isEnabled: { store.appLockEnabled })
     }
 
+    /// Warm the generation stack once per launch when a voice surface opens: a
+    /// 2-token respond() forces the local MLX weights (or the Apple FM session)
+    /// to load WHILE the user is still speaking, instead of stalling their first
+    /// answer for tens of seconds. No-op when no generator is available.
+    private var warmedVoiceStack = false
+    func prewarmVoiceStack() {
+        guard !warmedVoiceStack, aiReady else { return }
+        warmedVoiceStack = true
+        let gateway = modelGateway
+        Task.detached(priority: .utility) {
+            _ = try? await gateway.respond(instructions: "Reply with exactly: OK",
+                                           prompt: "OK", maxOutputTokens: 2)
+        }
+    }
+
     /// Call after a successful index rebuild: records the current embedder as the
     /// one that built the index and clears the stale flag.
     func markIndexRebuilt() {

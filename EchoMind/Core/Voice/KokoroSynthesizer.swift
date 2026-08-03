@@ -20,6 +20,10 @@ import AVFoundation
 final class KokoroSynthesizer: NSObject, SpeechSynthesizing {
     private let model: LocalModel
     private let manager = KokoroAneManager(variant: .english)
+    /// Voice output must NEVER be silent: any Kokoro failure (BNNS bug on iOS
+    /// 26.4–26.5.x, missing assets, synthesis error) falls back to the system
+    /// voice for that sentence.
+    private let fallback = SystemSpeechSynthesizer()
     private var initialized = false
     private var player: AVAudioPlayer?
     private var continuation: CheckedContinuation<Void, Never>?
@@ -30,6 +34,13 @@ final class KokoroSynthesizer: NSObject, SpeechSynthesizing {
     }
 
     nonisolated var isAvailable: Bool { true }
+
+    /// Load the CoreML chain up front (called when the voice screen opens), so the
+    /// first spoken reply isn't stalled behind model initialization.
+    func prepare() async {
+        guard !initialized else { return }
+        if (try? await manager.initialize()) != nil { initialized = true }
+    }
 
     func speak(_ text: String) async {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -53,14 +64,14 @@ final class KokoroSynthesizer: NSObject, SpeechSynthesizing {
                 if !player.play() { resume() }
             }
         } catch {
-            // Best-effort: a synthesis failure just produces no audio for this
-            // sentence; the controller moves on to the next one.
+            await fallback.speak(trimmed)   // never silent
         }
     }
 
     func stop() {
         player?.stop()
         player = nil
+        fallback.stop()
         resume()
     }
 

@@ -37,6 +37,23 @@ enum AskSelfTest {
         await ask(dependencies, "Hi")
         await ask(dependencies, "what is the refund policy?")
         await ask(dependencies, "who leads the security team?")
+
+        // Voice text path: the SAME streaming pipeline the voice agent consumes
+        // (shared retrieveContext + streamed prose). Proves retrieval + streaming
+        // generation end-to-end; only mic/TTS remain device-only.
+        if let streaming = dependencies.ragService as? StreamingRAGService {
+            var final = ""
+            var chunks = 0
+            do {
+                for try await cumulative in streaming.askStreaming("what is the refund policy?", history: []) {
+                    final = cumulative
+                    chunks += 1
+                }
+                print("[SelfTest] VOICE-STREAM ok (\(chunks) chunks, \(final.count) chars): \(final.prefix(140))")
+            } catch {
+                print("[SelfTest] VOICE-STREAM failed: \(error)")
+            }
+        }
         print("[SelfTest] done")
     }
 

@@ -130,8 +130,21 @@ nonisolated struct RAGPipeline: RAGService {
     /// Shared by `ask` and `askStreaming` (previously duplicated): rewrite →
     /// hybrid retrieve (cached corpus, adaptive expansion) → budget-pack →
     /// numbered context block.
+    /// Whether the question needs conversation history to make sense as a search
+    /// query. Standalone questions skip the rewrite — a full model round-trip that
+    /// dominated voice-turn latency (especially on local models).
+    static func needsRewrite(_ question: String) -> Bool {
+        let tokens = BM25.tokenize(question)
+        if tokens.count < 4 { return true }   // "why?", "and pricing?" — needs context
+        let contextual: Set<String> = ["it", "that", "this", "they", "them", "he", "she",
+                                       "him", "her", "his", "hers", "their", "those", "these", "one"]
+        return !contextual.isDisjoint(with: Set(tokens))
+    }
+
     func retrieveContext(question: String, history: [ChatTurn]) async throws -> Retrieval {
-        let searchQuery = history.isEmpty ? question : await rewrite(question, history: history)
+        let searchQuery = (history.isEmpty || !Self.needsRewrite(question))
+            ? question
+            : await rewrite(question, history: history)
         let retrieved = try await retriever.retrieve(searchQuery, k: Self.retrieveK)
         let memory = Self.memory(from: history)
         let packed = packChunks(retrieved, question: question, memory: memory)
