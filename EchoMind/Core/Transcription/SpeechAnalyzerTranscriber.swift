@@ -96,13 +96,12 @@ actor SpeechAnalyzerTranscriber: TranscriptionService {
         let lower = start.isFinite ? start : 0
         let upper = end.isFinite ? end : lower
 
-        let isFinal: Bool
-        if let analyzer, let volatileRange = await analyzer.volatileRange {
-            let intersection = CMTimeRangeGetIntersection(volatileRange, otherRange: result.range)
-            isFinal = CMTimeGetSeconds(intersection.duration) <= 0
-        } else {
-            isFinal = true
-        }
-        return TranscriptionUpdate(text: text, isFinal: isFinal, audioRange: lower...upper)
+        // The result's OWN finality — not an intersection with the analyzer's
+        // volatile window sampled later. That sampling raced: by the time we
+        // checked, the window had often advanced past an in-progress result, so
+        // volatile snapshots were misclassified as final and appended alongside
+        // the true final for the same speech → duplicated/overlapping transcript
+        // (and a line-count explosion big enough to trip the layout watchdog).
+        return TranscriptionUpdate(text: text, isFinal: result.isFinal, audioRange: lower...upper)
     }
 }

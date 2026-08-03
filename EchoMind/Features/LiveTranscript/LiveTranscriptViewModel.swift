@@ -253,10 +253,34 @@ final class LiveTranscriptViewModel {
             volatileText = update.text
             return
         }
-        let line = TranscriptLine(id: UUID(), text: update.text,
-                                  start: update.audioRange.lowerBound, end: update.audioRange.upperBound)
-        finalizedLines.append(line)
         volatileText = ""
+        let newStart = update.audioRange.lowerBound
+        let newEnd = update.audioRange.upperBound
+
+        // Exactly-once assembly: a replayed/refined final for speech we already
+        // accepted must never append a second copy (that was the overlapping,
+        // duplicated transcript — and, at scale, the layout-storm watchdog kill).
+        if let last = finalizedLines.last {
+            switch TranscriptAssembly.action(lastText: last.text, lastStart: last.start, lastEnd: last.end,
+                                             newText: update.text, newStart: newStart, newEnd: newEnd) {
+            case .drop:
+                return
+            case .replaceLast:
+                let refined = TranscriptLine(id: last.id, text: update.text,
+                                             start: min(last.start, newStart), end: max(last.end, newEnd))
+                finalizedLines[finalizedLines.count - 1] = refined
+                if sessionId != nil {
+                    try? await sessions.updateSegment(id: refined.id, text: refined.text,
+                                                      startTime: refined.start, endTime: refined.end)
+                }
+                return
+            case .append:
+                break
+            }
+        }
+
+        let line = TranscriptLine(id: UUID(), text: update.text, start: newStart, end: newEnd)
+        finalizedLines.append(line)
         if let sessionId {
             try? await sessions.appendSegment(
                 SegmentSnapshot(id: line.id, sessionId: sessionId, text: line.text,

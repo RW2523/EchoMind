@@ -12,6 +12,9 @@ nonisolated enum StorageError: Error, Equatable {
 nonisolated protocol SessionRepository: Sendable {
     func create(_ snapshot: SessionSnapshot) async throws
     func appendSegment(_ segment: SegmentSnapshot, toSession id: UUID) async throws
+    /// Refine an already-persisted segment in place (a finalized line was replaced
+    /// by a fuller version of the same utterance). No-op when the id is unknown.
+    func updateSegment(id: UUID, text: String, startTime: TimeInterval, endTime: TimeInterval) async throws
     func update(_ snapshot: SessionSnapshot) async throws
     func fetchAll() async throws -> [SessionSnapshot]
     /// Batch-wipe every session + segment WITHOUT materializing objects — the

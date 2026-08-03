@@ -21,6 +21,16 @@ actor SwiftDataSessionRepository: SessionRepository {
         try modelContext.save()
     }
 
+    func updateSegment(id: UUID, text: String, startTime: TimeInterval, endTime: TimeInterval) async throws {
+        var descriptor = FetchDescriptor<TranscriptSegment>(predicate: #Predicate { $0.id == id })
+        descriptor.fetchLimit = 1
+        guard let segment = try modelContext.fetch(descriptor).first else { return }
+        segment.text = text
+        segment.startTime = startTime
+        segment.endTime = endTime
+        try modelContext.save()
+    }
+
     func update(_ snapshot: SessionSnapshot) async throws {
         guard let session = try sessionModel(id: snapshot.id) else { throw StorageError.sessionNotFound }
         session.title = snapshot.title

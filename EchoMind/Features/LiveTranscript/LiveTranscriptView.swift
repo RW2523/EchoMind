@@ -88,7 +88,9 @@ private struct LiveTranscriptContent: View {
     private var transcript: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                VStack(alignment: .leading, spacing: 8) {
+                // Lazy: long recordings produce hundreds of lines; laying them all
+                // out eagerly on every update is what fed the watchdog kill.
+                LazyVStack(alignment: .leading, spacing: 8) {
                     ForEach(model.finalizedLines) { line in
                         Text(line.text).foregroundStyle(.primary)
                     }
