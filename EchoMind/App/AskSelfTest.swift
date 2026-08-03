@@ -37,6 +37,8 @@ enum AskSelfTest {
         await ask(dependencies, "Hi")
         await ask(dependencies, "what is the refund policy?")
         await ask(dependencies, "who leads the security team?")
+        // Synthesis probe: the answer must COMBINE separate passages, not quote one.
+        await ask(dependencies, "what should a new employee know about refunds and security?")
 
         // Voice text path: the SAME streaming pipeline the voice agent consumes
         // (shared retrieveContext + streamed prose). Proves retrieval + streaming
