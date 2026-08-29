@@ -39,6 +39,22 @@ enum AskSelfTest {
         await ask(dependencies, "who leads the security team?")
         // Synthesis probe: the answer must COMBINE separate passages, not quote one.
         await ask(dependencies, "what should a new employee know about refunds and security?")
+        // Premise-correction probe (field bug): a wrong user assertion must be
+        // corrected from the passages, not adopted or agreed with.
+        await ask(dependencies, "John leads the security team, right?")
+        // Anti-parrot probe (field bug): after a full answer sits in history, a NEW
+        // narrow question must get a fresh answer, not the previous one re-emitted.
+        let priorAnswer = "Customers may request a refund within 30 days of purchase. Refunds are processed within 5 business days to the original payment method. Digital goods are non-refundable once downloaded."
+        let history = [ChatTurn(role: .user, content: "what is the refund policy?"),
+                       ChatTurn(role: .assistant, content: priorAnswer)]
+        do {
+            let result = try await dependencies.ragService.ask("are digital goods refundable?", history: history)
+            let text = result.spokenText
+            let parroted = RAGPipeline.isNearDuplicate(text, of: priorAnswer)
+            print("[SelfTest] FOLLOW-UP \(parroted ? "PARROTED ✗" : "fresh ✓"): \(text.prefix(140))")
+        } catch {
+            print("[SelfTest] FOLLOW-UP failed: \(error)")
+        }
 
         // Voice text path: the SAME streaming pipeline the voice agent consumes
         // (shared retrieveContext + streamed prose). Proves retrieval + streaming

@@ -118,6 +118,29 @@ import SwiftData
         #expect(RAGPipeline.needsRewrite("and his budget approval for the quarter"))
     }
 
+    @Test func assistantTurnsAreTruncatedInMemoryBlock() {
+        // Full prior answers echoed into the prompt made small models re-emit them
+        // verbatim (field bug). User turns stay complete; assistant turns get a stub.
+        let long = String(repeating: "the quick brown fox jumps over the lazy dog ", count: 20)
+        let memory = RAGPipeline.memory(from: [
+            ChatTurn(role: .user, content: "what is the refund policy?"),
+            ChatTurn(role: .assistant, content: long),
+        ])
+        let assistantLine = memory.split(separator: "\n").last.map(String.init) ?? ""
+        #expect(assistantLine.hasSuffix("…"))
+        #expect(assistantLine.count < 260)
+        #expect(memory.contains("User: what is the refund policy?"))   // user turn untouched
+    }
+
+    @Test func nearDuplicateDetectsVerbatimAndAppendedRepeats() {
+        let prev = "The shooting took place on Delphi Road, in the Collegeway area of Mississauga, just before 12:30 a.m. Five unmarked cruisers were involved in the investigation and three collided with the Mercedes."
+        #expect(RAGPipeline.isNearDuplicate(prev, of: prev))                       // verbatim
+        #expect(RAGPipeline.isNearDuplicate(prev + " The stolen car was a Subaru.", of: prev))   // field case: repeat + one line
+        #expect(!RAGPipeline.isNearDuplicate("No — digital goods are non-refundable once downloaded.", of: prev))
+        #expect(!RAGPipeline.isNearDuplicate("Yes.", of: "Yes."))                  // short answers repeat legitimately
+        #expect(!RAGPipeline.isNearDuplicate(prev, of: nil))
+    }
+
     @Test func expansionParsingStripsListMarkers() async {
         let gateway = MockModelGateway(respondReturn: "1. phoenix release date\n- when does phoenix ship")
         let expanded = await RAGPipeline.expandQueries(gateway: gateway, query: "phoenix launch")

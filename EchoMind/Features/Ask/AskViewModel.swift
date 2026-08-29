@@ -140,7 +140,7 @@ final class AskViewModel {
 
                 var finalText = full.trimmingCharacters(in: .whitespacesAndNewlines)
                 if finalText.isEmpty {
-                    finalText = "Sorry, I couldn't answer that."
+                    finalText = "I couldn't come up with an answer for that — try rephrasing the question, or add a detail like a name or date."
                     continuation.yield(finalText)
                 }
                 await appendAssistant(finalText)

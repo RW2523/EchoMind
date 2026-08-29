@@ -61,6 +61,15 @@ nonisolated enum RAGPrompts {
     grounded answer. Set usedProvidedContext to false and leave citedPassages \
     empty.
 
+    When the user's message ASSERTS a fact, verify it against the passages: if it \
+    conflicts, begin by politely correcting it with the right fact ("Actually, it \
+    was …") and never adopt the user's incorrect names, places, or numbers as if \
+    true. Never begin with "Yes" unless their statement is fully supported.
+
+    Never repeat or restate your previous answer — the user already read it. \
+    Every reply must respond to the LATEST message only; if the new message just \
+    confirms something you covered, reply in one or two fresh sentences.
+
     Always suggest two or three short follow-up questions.
     """
 
@@ -85,9 +94,11 @@ nonisolated enum RAGPrompts {
     spoken prose — no markdown, bullets, or headings. Lead with the direct answer \
     as a complete sentence, then one or two supporting details if they help. Use \
     the Context when it's relevant, preserving names, numbers, and dates exactly, \
-    and combine related passages rather than reading one back. Otherwise answer \
-    from general knowledge. Keep it brief and easy to listen to — this will be \
-    spoken aloud.
+    and combine related passages rather than reading one back. If the user states \
+    something the Context contradicts, politely correct them with the right fact. \
+    Never repeat your previous answer — respond only to the latest message. \
+    Otherwise answer from general knowledge. Keep it brief and easy to listen \
+    to — this will be spoken aloud.
     """
 
     static func prompt(memory: String, question: String, context: String, knownFacts: String = "") -> String {
@@ -185,16 +196,18 @@ nonisolated struct RAGPipeline: RAGService {
         // One unified guided call — grounds (with citations) if the context is
         // relevant, chats otherwise; always returns follow-ups.
         let facts = await factsBlock()
+        let lastAssistant = history.last(where: { $0.role != .user })?.content
         do {
             return try await answer(question: trimmed, retrieval: retrieval, facts: facts,
-                                    packed: retrieval.packed)
+                                    packed: retrieval.packed, lastAssistant: lastAssistant)
         } catch ModelGatewayError.exceededContextWindow {
             guard retrieval.packed.count > 1 else {
                 return .retrievalOnly(passages: retrieval.retrieved, reason: .contextOverflow)
             }
             do {
                 return try await answer(question: trimmed, retrieval: retrieval, facts: facts,
-                                        packed: Array(retrieval.packed.dropLast()))
+                                        packed: Array(retrieval.packed.dropLast()),
+                                        lastAssistant: lastAssistant)
             } catch {
                 return .retrievalOnly(passages: retrieval.retrieved, reason: .contextOverflow)
             }
@@ -212,16 +225,29 @@ nonisolated struct RAGPipeline: RAGService {
     // MARK: - Generation
 
     private func answer(question: String, retrieval: Retrieval, facts: String,
-                        packed: [RetrievedChunk]) async throws -> AskResult {
+                        packed: [RetrievedChunk], lastAssistant: String? = nil) async throws -> AskResult {
         let context = packed.enumerated()
             .map { "[\($0.offset + 1)] \($0.element.chunk.text)" }
             .joined(separator: "\n\n")
-        let result = try await gateway.generate(
+        let prompt = RAGPrompts.prompt(memory: retrieval.memory, question: question,
+                                       context: context, knownFacts: facts)
+        var result = try await gateway.generate(
             instructions: RAGPrompts.hybrid,
-            prompt: RAGPrompts.prompt(memory: retrieval.memory, question: question,
-                                      context: context, knownFacts: facts),
+            prompt: prompt,
             as: RAGAnswer.self,
             maxOutputTokens: Self.outputReserve)
+        // Deterministic parrot guard (belt to the prompt's braces): if the model
+        // re-emitted its previous answer for a NEW message, retry once with an
+        // explicit corrective. Rare after the memory-echo truncation, and only
+        // ever costs one extra call when the duplication actually happened.
+        if Self.isNearDuplicate(result.answer, of: lastAssistant) {
+            let retry = try? await gateway.generate(
+                instructions: RAGPrompts.hybrid + "\n\nIMPORTANT: Your previous reply is already known to the user. Do NOT repeat it — respond freshly and only to the latest message.",
+                prompt: prompt,
+                as: RAGAnswer.self,
+                maxOutputTokens: Self.outputReserve)
+            if let retry, !Self.isNearDuplicate(retry.answer, of: lastAssistant) { result = retry }
+        }
         let text = result.answer.trimmingCharacters(in: .whitespacesAndNewlines)
         let followUps = Array(result.followUps.prefix(3))
         if result.usedProvidedContext && !packed.isEmpty {
@@ -245,6 +271,21 @@ nonisolated struct RAGPipeline: RAGService {
             let chunk = packed[index - 1].chunk
             return SourceRef(sourceId: chunk.sourceId, sourceType: chunk.sourceType, chunkId: chunk.id)
         }
+    }
+
+    /// True when a new answer is essentially the previous one re-emitted — exact
+    /// match after normalization, or one contains the other with similar length
+    /// (the field bug: previous answer repeated verbatim + one appended line).
+    static func isNearDuplicate(_ answer: String, of previous: String?) -> Bool {
+        guard let previous else { return false }
+        let a = answer.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        let b = previous.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        guard a.count > 40, b.count > 40 else { return false }   // short answers repeat legitimately
+        if a == b { return true }
+        let shorter = Double(min(a.count, b.count))
+        let longer = Double(max(a.count, b.count))
+        guard shorter / longer > 0.75 else { return false }
+        return a.contains(b) || b.contains(a)
     }
 
     /// Adaptive expansion (weak retrieval only): two alternative phrasings from
@@ -293,9 +334,19 @@ nonisolated struct RAGPipeline: RAGService {
         return included
     }
 
+    /// Assistant turns are TRUNCATED in the memory block: echoing full prior
+    /// answers back into the prompt made small models re-emit them verbatim on
+    /// the next question (the field-reported "repeats the response" bug). A stub
+    /// keeps conversational context without providing copyable material.
+    static let assistantMemoryLimit = 220
+
     static func memory(from history: [ChatTurn]) -> String {
         history.suffix(memoryTurns).map { turn in
-            "\(turn.role == .user ? "User" : "Assistant"): \(turn.content)"
+            guard turn.role != .user else { return "User: \(turn.content)" }
+            let text = turn.content.count <= assistantMemoryLimit
+                ? turn.content
+                : String(turn.content.prefix(assistantMemoryLimit)) + "…"
+            return "Assistant: \(text)"
         }.joined(separator: "\n")
     }
 
