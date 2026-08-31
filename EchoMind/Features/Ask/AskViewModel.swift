@@ -34,6 +34,20 @@ final class AskViewModel {
         messages = display
     }
 
+    /// Write the conversation as a .txt file for the share sheet (export feature).
+    /// Returns nil when there's nothing to export or the write fails.
+    func exportChatFile() -> URL? {
+        guard !messages.isEmpty else { return nil }
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent(ChatExport.fileName())
+        do {
+            try ChatExport.text(messages: messages).write(to: url, atomically: true, encoding: .utf8)
+            return url
+        } catch {
+            return nil
+        }
+    }
+
     /// Wipe the conversation (history, follow-ups, and the persisted messages).
     /// Long-term memory facts are untouched — those live in Settings ▸ Memory.
     func clearChat() async {

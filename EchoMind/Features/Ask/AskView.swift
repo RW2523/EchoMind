@@ -7,6 +7,8 @@ struct AskView: View {
     @State private var voice: VoiceSessionController?
     @State private var showVoiceMode = false
     @State private var confirmClear = false
+    @State private var exportURL: URL?
+    @State private var showExport = false
 
     var body: some View {
         Group {
@@ -20,6 +22,14 @@ struct AskView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
+                    Button {
+                        if let url = model?.exportChatFile() {
+                            exportURL = url
+                            showExport = true
+                        }
+                    } label: {
+                        Label("Export Chat as Text", systemImage: "square.and.arrow.up")
+                    }
                     Button(role: .destructive) {
                         confirmClear = true
                     } label: {
@@ -30,6 +40,11 @@ struct AskView: View {
                 }
                 .disabled(model?.messages.isEmpty ?? true)
                 .accessibilityLabel("Chat options")
+            }
+        }
+        .sheet(isPresented: $showExport) {
+            if let exportURL {
+                ShareSheet(items: [exportURL])
             }
         }
         .confirmationDialog("Clear this conversation?", isPresented: $confirmClear, titleVisibility: .visible) {
