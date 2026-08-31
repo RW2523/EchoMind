@@ -9,6 +9,12 @@
 	<!-- Standard OS encryption only (HTTPS/keychain) → export-exempt. -->
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<!-- Exports live in Documents; these make it visible in Files ▸ On My iPhone
+	     ▸ EchoMind and in Finder when the phone is cabled. -->
+	<key>UIFileSharingEnabled</key>
+	<true/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
 	<!-- F4: optional app lock. -->
 	<key>NSFaceIDUsageDescription</key>
 	<string>EchoMind uses Face ID to unlock the app when you turn on the app lock in Settings.</string>

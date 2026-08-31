@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Chat-style RAG Q&A over ChatMessage storage (§6.3).
 struct AskView: View {
@@ -9,6 +10,8 @@ struct AskView: View {
     @State private var confirmClear = false
     @State private var exportURL: URL?
     @State private var showExport = false
+    @State private var saveDocument: TextFileDocument?
+    @State private var showSave = false
 
     var body: some View {
         Group {
@@ -23,12 +26,20 @@ struct AskView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     Button {
+                        if let model, !model.messages.isEmpty {
+                            saveDocument = TextFileDocument(text: ChatExport.text(messages: model.messages))
+                            showSave = true
+                        }
+                    } label: {
+                        Label("Download as Text File", systemImage: "arrow.down.doc")
+                    }
+                    Button {
                         if let url = model?.exportChatFile() {
                             exportURL = url
                             showExport = true
                         }
                     } label: {
-                        Label("Export Chat as Text", systemImage: "square.and.arrow.up")
+                        Label("Share Chat…", systemImage: "square.and.arrow.up")
                     }
                     Button(role: .destructive) {
                         confirmClear = true
@@ -47,6 +58,13 @@ struct AskView: View {
                 ShareSheet(items: [exportURL])
             }
         }
+        // The real "download": a save dialog into the Files app. The chosen
+        // location is the user's; our own Documents folder is also browsable
+        // (Files ▸ On My iPhone ▸ EchoMind) via UIFileSharingEnabled.
+        .fileExporter(isPresented: $showSave,
+                      document: saveDocument,
+                      contentType: .plainText,
+                      defaultFilename: ChatExport.fileName()) { _ in }
         .confirmationDialog("Clear this conversation?", isPresented: $confirmClear, titleVisibility: .visible) {
             Button("Clear Chat", role: .destructive) {
                 Task { await model?.clearChat() }
