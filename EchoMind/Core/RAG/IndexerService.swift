@@ -54,7 +54,18 @@ actor RAGIndexer: IndexerService {
                 .map { (pageNumber: $0.offset + 1, utf16Offset: $0.element) }
             let textChunks = chunker.chunk(document: document.textContent,
                                            pageBreaks: pageBreaks, sourceId: id)
-            try await embedAndStore(textChunks, sourceId: id)
+            // Document identity on every chunk (RAGFlow-style metadata): with
+            // several documents indexed, retrieval mixes chunks across them —
+            // the model then attributed paper A's facts to paper B. The prefix
+            // gives both the ranker (BM25/embedding) and the model an
+            // attribution signal. Existing docs pick this up on reindex.
+            let branded = textChunks.map { chunk in
+                TextChunk(text: "[\(document.title)] \(chunk.text)",
+                          sourceId: chunk.sourceId, sourceType: chunk.sourceType,
+                          chunkIndex: chunk.chunkIndex, pageNumber: chunk.pageNumber,
+                          timestamp: chunk.timestamp)
+            }
+            try await embedAndStore(branded, sourceId: id)
             try await documents.updateStatus(id: id, status: .ready)
             await onIndexChanged?()
             eventContinuation.yield(.finished(sourceId: id))
@@ -72,7 +83,16 @@ actor RAGIndexer: IndexerService {
             try await chunks.deleteChunks(sourceId: id, sourceType: .session)
             let tuples = segments.map { (text: $0.text, startTime: $0.startTime) }
             let textChunks = chunker.chunk(segments: tuples, sourceId: id)
-            try await embedAndStore(textChunks, sourceId: id)
+            // Same identity branding as documents — meeting chunks need
+            // attribution too, or their facts get blamed on other sources.
+            let title = (try? await sessions.fetchSession(id: id))?.title
+            let branded = textChunks.map { chunk in
+                TextChunk(text: title.map { "[\($0)] \(chunk.text)" } ?? chunk.text,
+                          sourceId: chunk.sourceId, sourceType: chunk.sourceType,
+                          chunkIndex: chunk.chunkIndex, pageNumber: chunk.pageNumber,
+                          timestamp: chunk.timestamp)
+            }
+            try await embedAndStore(branded, sourceId: id)
             await onIndexChanged?()
             eventContinuation.yield(.finished(sourceId: id))
         } catch {

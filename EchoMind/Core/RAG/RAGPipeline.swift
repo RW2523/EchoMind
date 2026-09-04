@@ -9,6 +9,9 @@ nonisolated enum RetrievalOnlyReason: Sendable, Equatable {
 nonisolated enum AskResult: Sendable, Equatable {
     case grounded(answer: String, sources: [SourceRef], followUps: [String])
     case conversational(answer: String, followUps: [String])
+    /// The user asked about their knowledge and it genuinely isn't there —
+    /// an honest "not found", never a confabulated answer.
+    case notFound(answer: String, followUps: [String])
     case retrievalOnly(passages: [RetrievedChunk], reason: RetrievalOnlyReason)
 }
 
@@ -34,6 +37,7 @@ extension AskResult {
         switch self {
         case .grounded(let answer, _, _): return answer
         case .conversational(let answer, _): return answer
+        case .notFound(let answer, _): return answer
         case .retrievalOnly: return "Here's what I found in your knowledge."
         }
     }
@@ -49,17 +53,33 @@ nonisolated enum RAGPrompts {
 
     If it IS relevant: answer from it properly — lead with the direct answer as a \
     complete sentence, then add the most useful supporting details, combining \
-    multiple passages when they relate. Preserve names, numbers, and dates \
-    verbatim. Aim for two to five sentences. If passages conflict, prefer the \
-    most recent and note the discrepancy. If the Context only partially answers, \
-    give what it supports and say plainly what it doesn't cover — never pad with \
-    guesses. Set usedProvidedContext to true and list the passage numbers you \
-    used in citedPassages (only ones that directly support your answer).
+    multiple passages when they relate. Aim for two to five sentences. If \
+    passages conflict, prefer the most recent and note the discrepancy. Set \
+    usedProvidedContext to true and list the passage numbers you used in \
+    citedPassages (only ones that directly support your answer).
 
-    If it is NOT relevant (greetings, small talk, general knowledge): ignore the \
-    Context entirely and answer naturally. Never force a casual message into a \
-    grounded answer. Set usedProvidedContext to false and leave citedPassages \
-    empty.
+    HARD RULES for grounded answers — these outrank everything else:
+    1. The passages are the ONLY source of facts about the user's documents and \
+    meetings. Every number, name, title, and author you state must appear in a \
+    passage — NEVER invent or estimate one.
+    2. Earlier conversation turns may contain mistakes. Never repeat a figure or \
+    fact from the conversation unless it also appears in the current passages.
+    3. If the passages do not contain what was asked — a term, person, figure, \
+    or topic — say you couldn't find it in their knowledge, set \
+    notFoundInContext to true, and do NOT answer from general knowledge. But if \
+    the passages answer PART of the question, give that partial answer and say \
+    which part you couldn't find — reserve notFoundInContext for when the \
+    passages contain nothing relevant to the question.
+    4. Use the document's exact wording for key terms (if it says "age", do not \
+    say "birthdate").
+    5. Attribute carefully. Mind negations and who does what: "X does not do \
+    this; Y does it" must never become "X does this". When passages come from \
+    different documents, never mix their facts.
+
+    If it is NOT relevant (greetings, small talk, clearly general questions): \
+    ignore the Context entirely and answer naturally. Never force a casual \
+    message into a grounded answer. Set usedProvidedContext to false and leave \
+    citedPassages empty.
 
     When the user's message ASSERTS a fact, verify it against the passages: if it \
     conflicts, begin by politely correcting it with the right fact ("Actually, it \
@@ -92,8 +112,11 @@ nonisolated enum RAGPrompts {
     static let voiceProse = """
     You are EchoMind, a warm voice assistant. Answer the latest message in natural \
     spoken prose — no markdown, bullets, or headings. Lead with the direct answer \
-    as a complete sentence, then one or two supporting details if they help. Use \
-    the Context when it's relevant, preserving names, numbers, and dates exactly, \
+    as a complete sentence, then one or two supporting details if they help. Every \
+    number and name you state about the user's documents must come from the \
+    Context — if it isn't there, say you couldn't find it instead of guessing, \
+    and never repeat a figure from earlier conversation unless the Context \
+    confirms it. Use the Context when it's relevant, preserving its exact terms, \
     and combine related passages rather than reading one back. If the user states \
     something the Context contradicts, politely correct them with the right fact. \
     Never repeat your previous answer — respond only to the latest message. \
@@ -248,8 +271,50 @@ nonisolated struct RAGPipeline: RAGService {
                 maxOutputTokens: Self.outputReserve)
             if let retry, !Self.isNearDuplicate(retry.answer, of: lastAssistant) { result = retry }
         }
-        let text = result.answer.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Anti-confabulation gate: every figure in a grounded answer must exist in
+        // the passages (or the question). A violation gets ONE corrective retry
+        // naming the fabricated numbers; if the model persists, the answer ships
+        // with an honest caveat — never a silently wrong figure. (Field bug: the
+        // model answered "22,000 frames, split 9,000 each" for a document that
+        // said 5,800 clips split 5,000/400/400.)
+        // Figures the app itself injected (known facts) or the user stated in
+        // earlier turns are legitimate support — only assistant history stays
+        // distrusted (that's where the echoed-wrong-figure bug lived).
+        let userTurns = retrieval.memory.split(separator: "\n")
+            .filter { $0.hasPrefix("User: ") }.joined(separator: "\n")
+        let extraAllowed = [facts, userTurns]
+        var caveat = ""
+        if result.usedProvidedContext, !result.notFoundInContext, !packed.isEmpty {
+            let unsupported = AnswerVerifier.unsupportedNumbers(
+                answer: result.answer, context: context, question: question, extraAllowed: extraAllowed)
+            if !unsupported.isEmpty {
+                let corrective = prompt + "\n\nIMPORTANT: your previous draft used figures that are NOT in the passages: "
+                    + unsupported.joined(separator: ", ")
+                    + ". Answer again using ONLY figures that appear in the passages; if the information isn't there, say so and set notFoundInContext true."
+                if let retry = try? await gateway.generate(
+                    instructions: RAGPrompts.hybrid, prompt: corrective,
+                    as: RAGAnswer.self, maxOutputTokens: Self.outputReserve),
+                   !Self.isNearDuplicate(retry.answer, of: lastAssistant) {
+                    result = retry
+                }
+                // The caveat must NOT depend on the retry's self-reported flags:
+                // a small model under corrective pressure can flip
+                // usedProvidedContext/notFoundInContext while keeping the bad
+                // figure, and the whole point is never shipping it silently.
+                let still = AnswerVerifier.unsupportedNumbers(
+                    answer: result.answer, context: context, question: question, extraAllowed: extraAllowed)
+                if !still.isEmpty {
+                    caveat = "\n\n⚠️ Double-check these figures against your documents — I couldn't verify: \(still.joined(separator: ", "))."
+                }
+            }
+        }
+
+        let text = result.answer.trimmingCharacters(in: .whitespacesAndNewlines) + caveat
         let followUps = Array(result.followUps.prefix(3))
+        if result.notFoundInContext {
+            return .notFound(answer: text, followUps: followUps)
+        }
         if result.usedProvidedContext && !packed.isEmpty {
             return .grounded(answer: text,
                              sources: Self.citedSources(result.citedPassages, packed: packed),
@@ -389,7 +454,25 @@ extension RAGPipeline: StreamingRAGService {
                     let source = (gateway as? StreamingModelGateway)?
                         .stream(instructions: RAGPrompts.voiceProse, prompt: prompt, maxOutputTokens: Self.outputReserve)
                         ?? gateway.oneShotStream(instructions: RAGPrompts.voiceProse, prompt: prompt, maxOutputTokens: Self.outputReserve)
-                    for try await chunk in source { continuation.yield(chunk) }
+                    var final = ""
+                    for try await chunk in source {
+                        final = chunk
+                        continuation.yield(chunk)
+                    }
+                    // Voice can't retry (the words are already being spoken), but
+                    // it must never end on a silently unverifiable figure: append
+                    // a spoken caveat when the finished answer used numbers that
+                    // exist nowhere in the passages, the question, or user turns.
+                    if !retrieval.context.isEmpty {
+                        let userTurns = retrieval.memory.split(separator: "\n")
+                            .filter { $0.hasPrefix("User: ") }.joined(separator: "\n")
+                        let unsupported = AnswerVerifier.unsupportedNumbers(
+                            answer: final, context: retrieval.context, question: trimmed,
+                            extraAllowed: [facts, userTurns])
+                        if !unsupported.isEmpty {
+                            continuation.yield(final + " Please double-check those figures against your documents — I couldn't verify them.")
+                        }
+                    }
                     continuation.finish()
                 } catch {
                     continuation.finish(throwing: error)

@@ -11,6 +11,23 @@ nonisolated enum DebugFixtures {
     static let groundTruthQuestion = "Open question: do we need a data-processing addendum for the EU region?"
 
     // A realistic sample document to seed the Knowledge tab for testing Ask.
+    /// Synthetic mini-doc reproducing the college field-report confabulation
+    /// traps (original text, same patterns): a nearby-number trap (22 locations
+    /// next to the real 5,800/5,000/400/400 split), a negation/attribution trap
+    /// (we do NOT store card data; the processor does), and exact-recall figures.
+    static let confabulationTrapTitle = "Falcon Dataset Notes"
+    static let confabulationTrapText = """
+    Falcon Dataset Notes
+
+    Footage was collected at 22 parking locations across the city. The final \
+    dataset contains 5,800 clips, split into 5,000 training, 400 validation, \
+    and 400 test clips. Each clip is 150 frames long (5 seconds at 30 fps).
+
+    Billing: We do not store credit card details ourselves. All card data is \
+    stored by our payment processor, PayFlow, under its own privacy policy. \
+    We receive only a token and the last four digits.
+    """
+
     static let sampleDocumentTitle = "Company Handbook"
     static let sampleDocumentText = """
     # Company Handbook

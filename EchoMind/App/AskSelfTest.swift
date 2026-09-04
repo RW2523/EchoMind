@@ -56,6 +56,27 @@ enum AskSelfTest {
             print("[SelfTest] FOLLOW-UP failed: \(error)")
         }
 
+        // Anti-confabulation probes (college field-report patterns). A second
+        // document also exercises cross-document attribution.
+        let trapId = UUID()
+        do {
+            try await dependencies.documentRepository.create(
+                DocumentSnapshot(id: trapId, title: DebugFixtures.confabulationTrapTitle,
+                                 fileName: "falcon.md", fileType: .md,
+                                 textContent: DebugFixtures.confabulationTrapText,
+                                 pageBreaks: [], status: .imported))
+            try await dependencies.indexer.indexDocument(id: trapId)
+            print("[SelfTest] indexed confabulation-trap document OK")
+        } catch {
+            print("[SelfTest] trap indexing failed: \(error)")
+        }
+        // Nearby-number trap: must answer 5,800 / 5,000 / 400 / 400 — never "22,000".
+        await ask(dependencies, "how many clips are in the falcon dataset and how are they split?")
+        // Negation/attribution trap: the correct answer is the PROCESSOR stores it.
+        await ask(dependencies, "does falcon store credit card details?")
+        // Absent-term trap: must be NOT-FOUND, never a confabulated explanation.
+        await ask(dependencies, "what is the XQRT-9 module in my documents?")
+
         // Voice text path: the SAME streaming pipeline the voice agent consumes
         // (shared retrieveContext + streamed prose). Proves retrieval + streaming
         // generation end-to-end; only mic/TTS remain device-only.
@@ -83,6 +104,8 @@ enum AskSelfTest {
                 print("[SelfTest] Q:\"\(question)\" -> CONVERSATIONAL: \(answer) · followUps=\(followUps)")
             case .grounded(let answer, let sources, let followUps):
                 print("[SelfTest] Q:\"\(question)\" -> GROUNDED (\(sources.count) src): \(answer) · followUps=\(followUps)")
+            case .notFound(let answer, _):
+                print("[SelfTest] Q:\"\(question)\" -> NOT-FOUND: \(answer.prefix(140))")
             case .retrievalOnly(let passages, let reason):
                 print("[SelfTest] Q:\"\(question)\" -> RETRIEVAL-ONLY (\(passages.count) passages, \(reason))")
             }

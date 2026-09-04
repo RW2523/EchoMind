@@ -175,6 +175,11 @@ final class AskViewModel {
             try? await chat.append(message)
             return AskMessage(id: message.id, role: .assistant, content: answer,
                               sources: await resolve(refs), kind: .grounded, followUps: followUps)
+        case .notFound(let answer, let followUps):
+            let message = ChatMessageSnapshot(conversationId: conversationId, role: .assistant, content: answer)
+            try? await chat.append(message)
+            return AskMessage(id: message.id, role: .assistant, content: answer,
+                              sources: [], kind: .notFound, followUps: followUps)
         case .conversational(let answer, let followUps):
             let message = ChatMessageSnapshot(conversationId: conversationId, role: .assistant, content: answer)
             try? await chat.append(message)
@@ -219,11 +224,18 @@ final class AskViewModel {
             let chunk = ref.chunkId.flatMap { chunkById[$0] }
             let detail = chunk?.pageNumber.map { "Page \($0)" }
                 ?? chunk?.timestamp.map { SessionExporter.timestamp($0) }
+            let sourceTitle = await title(ref.sourceId, ref.sourceType)
+            // The "[title] " prefix is retrieval metadata, not content — the
+            // source card already shows the title, so drop it from the preview.
+            var preview = chunk?.text
+            if let text = preview, text.hasPrefix("[\(sourceTitle)] ") {
+                preview = String(text.dropFirst(sourceTitle.count + 3))
+            }
             sources.append(AskSource(
                 id: ref.chunkId ?? ref.sourceId,
-                title: await title(ref.sourceId, ref.sourceType),
+                title: sourceTitle,
                 detail: detail,
-                preview: chunk?.text,
+                preview: preview,
                 sourceId: ref.sourceId, sourceType: ref.sourceType,
                 pageNumber: chunk?.pageNumber, timestamp: chunk?.timestamp))
         }
