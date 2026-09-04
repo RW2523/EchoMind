@@ -43,7 +43,7 @@ final class LiveTranscriptViewModel {
     private let indexer: (any IndexerService)?
     private let reportGenerator: (any ReportGenerating)?
     private let locale: Locale
-    private let retainAudio: Bool
+    private let retainAudio: () -> Bool
     private let audioStore: AudioStore
 
     private var sessionId: UUID?
@@ -51,6 +51,7 @@ final class LiveTranscriptViewModel {
     private var eventTask: Task<Void, Never>?
     private var updateTask: Task<Void, Never>?
     private var audioWriter: AudioFileWriter?
+    private var isStarting = false
 
     init(audio: any AudioCapturing,
          transcription: any TranscriptionService,
@@ -59,7 +60,7 @@ final class LiveTranscriptViewModel {
          permissions: any PermissionManaging,
          indexer: (any IndexerService)? = nil,
          reportGenerator: (any ReportGenerating)? = nil,
-         retainAudio: Bool = false,
+         retainAudio: @escaping () -> Bool = { false },
          audioStore: AudioStore = AudioStore(),
          locale: Locale = .current) {
         self.audio = audio
@@ -87,6 +88,11 @@ final class LiveTranscriptViewModel {
         case .idle, .failed: break
         default: return
         }
+        // Synchronous reentrancy guard: the phase stays .idle across the awaits
+        // below, so a double-tap raced two starts (duplicate session, stuck mic).
+        guard !isStarting else { return }
+        isStarting = true
+        defer { isStarting = false }
 
         guard await ensurePermissions(), await ensureAssets() else { return }
         guard StorageGuard.hasSufficientSpace() else {
@@ -129,8 +135,12 @@ final class LiveTranscriptViewModel {
         } catch is AudioCaptureError {
             phase = .failed(.sessionActivationFailed)
         } catch let error as TranscriptionError {
+            // The engine may already be capturing (transcription.start failed
+            // after audio.start succeeded) — never leave a hot mic behind.
+            await audio.stop()
             phase = .failed(error)
         } catch {
+            await audio.stop()
             phase = .failed(.transcriberFailed(String(describing: error)))
         }
     }
@@ -175,7 +185,7 @@ final class LiveTranscriptViewModel {
 
     private func makeRetainedStream(_ buffers: AsyncThrowingStream<AudioBufferBox, Error>,
                                     sessionId: UUID) -> AsyncThrowingStream<AudioBufferBox, Error> {
-        guard retainAudio, let url = try? audioStore.prepareURL(for: sessionId) else { return buffers }
+        guard retainAudio(), let url = try? audioStore.prepareURL(for: sessionId) else { return buffers }
         let writer = AudioFileWriter(url: url)
         audioWriter = writer
         return Self.tee(buffers) { box in await writer.write(box.buffer) }
@@ -241,11 +251,26 @@ final class LiveTranscriptViewModel {
                 for try await update in updates {
                     await self.handle(update)
                 }
+                // The stream ending while we still think we're recording means
+                // the pipeline died underneath us — never show a live recording
+                // over a dead mic; tear down and surface the failure.
+                if self.phase == .recording || self.phase == .pausedByInterruption {
+                    await self.teardownAfterFailure(.transcriberFailed("Transcription ended unexpectedly."))
+                }
             } catch {
-                self.phase = .failed(.transcriberFailed(String(describing: error)))
-                await self.finalize()
+                // The transcriber failed mid-recording: stop the engine too, or
+                // the mic stays hot and Record is bricked until app kill.
+                await self.teardownAfterFailure(.transcriberFailed(String(describing: error)))
             }
         }
+    }
+
+    private func teardownAfterFailure(_ error: TranscriptionError) async {
+        phase = .failed(error)
+        await audio.stop()
+        await transcription.stop()
+        eventTask?.cancel()
+        await finalize()
     }
 
     private func handle(_ update: TranscriptionUpdate) async {
@@ -294,10 +319,14 @@ final class LiveTranscriptViewModel {
     func stopTapped() async {
         guard isRecording else { return }
         phase = .stopping
+        // Order matters: transcription.stop() finalizes the tail of the last
+        // utterance through the updates stream; the loop must CONSUME those
+        // finals (await, not cancel) or the meeting's last words are lost.
         await transcription.stop()
+        await updateTask?.value
         await audio.stop()
         eventTask?.cancel()
-        updateTask?.cancel()
+        updateTask = nil
         await finalize()
         if let id = sessionId {
             // Index for RAG, then auto-generate the report in the background (R1).

@@ -30,6 +30,11 @@ final class LiveVoiceInput: VoiceInput {
     private var volatile = ""
     private var updateTask: Task<Void, Never>?
     private var continuation: AsyncStream<String>.Continuation?
+    /// True only between a fully successful start() and stop(). The audio and
+    /// transcription actors are SHARED with the meeting recorder — stop() must
+    /// never tear down a capture this voice session doesn't own (field bug:
+    /// closing the voice screen killed an active meeting recording).
+    private var owningCapture = false
 
     init(audio: any AudioCapturing,
          transcription: any TranscriptionService,
@@ -62,6 +67,7 @@ final class LiveVoiceInput: VoiceInput {
             throw VoiceInputError.speechUnavailable
         }
 
+        owningCapture = true
         let (stream, continuation) = AsyncStream<String>.makeStream()
         self.continuation = continuation
         updateTask = Task { @MainActor [weak self] in
@@ -89,9 +95,20 @@ final class LiveVoiceInput: VoiceInput {
     }
 
     func stop() async -> String {
+        // Only tear down a capture this session actually started — the actors
+        // are shared with the meeting recorder.
+        if owningCapture {
+            owningCapture = false
+            // Stop the transcriber FIRST and let its finalize flush the tail of
+            // the utterance through the update loop; cancelling the consumer
+            // before the flush dropped the last words of voice questions. The
+            // finished updates stream ends the loop, so await it (don't cancel).
+            await transcription.stop()
+            await updateTask?.value
+            await audio.stop()
+        }
         updateTask?.cancel()
-        await transcription.stop()
-        await audio.stop()
+        updateTask = nil
         continuation?.finish()
         continuation = nil
         return finalized.trimmingCharacters(in: .whitespacesAndNewlines)

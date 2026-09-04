@@ -40,6 +40,7 @@ struct SessionDetailView: View {
 private struct SessionDetailContent: View {
     @Bindable var model: SessionDetailViewModel
     let audioURL: URL?
+    @Environment(AppDependencies.self) private var dependencies
     @Environment(\.dismiss) private var dismiss
     @State private var showRename = false
     @State private var showDelete = false
@@ -80,6 +81,9 @@ private struct SessionDetailContent: View {
             }
         }
         .task {
+            playback.isCaptureActive = { [weak dependencies] in
+                dependencies?.liveTranscriptViewModel.isRecording ?? false
+            }
             if let audioURL { playback.load(url: audioURL) }
         }
         .onDisappear { playback.stop() }

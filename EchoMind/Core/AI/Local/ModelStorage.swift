@@ -33,4 +33,22 @@ nonisolated enum ModelStorage {
             try FileManager.default.removeItem(at: url)
         }
     }
+
+    /// Best-effort removal of the actual weights (0.7–1.8 GB) from the Hugging
+    /// Face cache. The marker alone made "Delete" free zero bytes — the user
+    /// keeps paying the disk cost of a model they removed. Layouts covered:
+    /// Documents/huggingface/models/<repo> and Caches/huggingface/models/<repo>.
+    static func removeCachedWeights(repo: String) {
+        let fm = FileManager.default
+        let bases = [fm.urls(for: .documentDirectory, in: .userDomainMask).first,
+                     fm.urls(for: .cachesDirectory, in: .userDomainMask).first]
+        for base in bases {
+            guard let base else { continue }
+            let candidate = base.appendingPathComponent("huggingface/models", isDirectory: true)
+                .appendingPathComponent(repo, isDirectory: true)
+            if fm.fileExists(atPath: candidate.path) {
+                try? fm.removeItem(at: candidate)
+            }
+        }
+    }
 }

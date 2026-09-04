@@ -17,17 +17,11 @@ struct LiveTranscriptView: View {
         .navigationTitle("Live Transcript")
         .navigationBarTitleDisplayMode(.inline)
         .task {
+            // Shared instance from the composition root: leaving mid-recording
+            // and coming back must reattach to the live capture, not build a
+            // fresh idle view model over a hot mic.
             if model == nil {
-                model = LiveTranscriptViewModel(
-                    audio: dependencies.audioCapturing,
-                    transcription: dependencies.transcriptionService,
-                    assets: dependencies.speechAssets,
-                    sessions: dependencies.sessionRepository,
-                    permissions: dependencies.permissions,
-                    indexer: dependencies.indexer,
-                    reportGenerator: dependencies.reportGenerator,
-                    retainAudio: dependencies.settingsStore.audioRetentionEnabled,
-                    audioStore: dependencies.audioStore)
+                model = dependencies.liveTranscriptViewModel
             }
         }
     }

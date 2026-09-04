@@ -17,6 +17,8 @@ final class AskViewModel {
 
     // Single default conversation in V1.
     private let conversationId = UUID(uuidString: "00000000-0000-0000-0000-0000000000A5")!
+    // Written once in init, read in deinit (nonisolated) — safe by construction.
+    private nonisolated(unsafe) var wipeObserver: Task<Void, Never>?
 
     init(rag: any RAGService, chat: any ChatRepository, chunks: any ChunkRepository,
          documents: any DocumentRepository, sessions: any SessionRepository) {
@@ -25,6 +27,18 @@ final class AskViewModel {
         self.chunks = chunks
         self.documents = documents
         self.sessions = sessions
+        // Delete All Data wipes the persisted chat; this thread's in-memory
+        // copy must go with it, or stale messages keep feeding new questions.
+        wipeObserver = Task { [weak self] in
+            for await _ in NotificationCenter.default.notifications(named: .echoMindDataWiped).map({ _ in () }) {
+                guard let self else { return }
+                self.messages = []
+            }
+        }
+    }
+
+    deinit {
+        wipeObserver?.cancel()
     }
 
     func load() async {
@@ -153,6 +167,15 @@ final class AskViewModel {
                 }
 
                 var finalText = full.trimmingCharacters(in: .whitespacesAndNewlines)
+                if Task.isCancelled {
+                    // Barge-in / screen close: the user interrupted on purpose.
+                    // Persist whatever was actually spoken; never fabricate a
+                    // "couldn't come up with an answer" failure into history.
+                    if !finalText.isEmpty { await appendAssistant(finalText) }
+                    continuation.finish()
+                    state = .idle
+                    return
+                }
                 if finalText.isEmpty {
                     finalText = "I couldn't come up with an answer for that — try rephrasing the question, or add a detail like a name or date."
                     continuation.yield(finalText)

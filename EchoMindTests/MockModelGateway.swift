@@ -15,6 +15,8 @@ actor MockModelGateway: ModelGateway {
 
     private(set) var respondCalls = 0
     private(set) var generateCalls = 0
+    private(set) var lastGeneratePrompt: String?
+    private(set) var lastRespondPrompt: String?
 
     init(overflowRespond: Int = 0, overflowGenerate: Int = 0,
          respondReturn: String = "partial summary bullet",
@@ -31,12 +33,14 @@ actor MockModelGateway: ModelGateway {
 
     func respond(instructions: String, prompt: String, maxOutputTokens: Int) async throws -> String {
         respondCalls += 1
+        lastRespondPrompt = prompt
         if overflowRespond > 0 { overflowRespond -= 1; throw ModelGatewayError.exceededContextWindow }
         return respondReturn
     }
 
     func generate<T: Generable & Sendable>(instructions: String, prompt: String, as type: T.Type, maxOutputTokens: Int) async throws -> T {
         generateCalls += 1
+        lastGeneratePrompt = prompt
         if overflowGenerate > 0 { overflowGenerate -= 1; throw ModelGatewayError.exceededContextWindow }
         if !ragAnswerSequence.isEmpty, T.self == RAGAnswer.self {
             let next = ragAnswerSequence.count > 1 ? ragAnswerSequence.removeFirst() : ragAnswerSequence[0]

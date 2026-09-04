@@ -28,9 +28,28 @@ final class KokoroSynthesizer: NSObject, SpeechSynthesizing {
     private var player: AVAudioPlayer?
     private var continuation: CheckedContinuation<Void, Never>?
 
+    // Written once in init, read in deinit (nonisolated) — safe by construction.
+    private nonisolated(unsafe) var interruptionObserver: (any NSObjectProtocol)?
+
     init(model: LocalModel) {
         self.model = model
         super.init()
+        // An audio-session interruption (call, Siri, alarm) pauses AVAudioPlayer
+        // WITHOUT firing didFinishPlaying — speak()'s continuation would never
+        // resume and the voice session froze forever. Treat interruption as stop.
+        interruptionObserver = NotificationCenter.default.addObserver(
+            forName: AVAudioSession.interruptionNotification, object: nil, queue: .main) { [weak self] note in
+            guard let info = note.userInfo,
+                  let raw = info[AVAudioSessionInterruptionTypeKey] as? UInt,
+                  AVAudioSession.InterruptionType(rawValue: raw) == .began else { return }
+            Task { @MainActor in self?.stop() }
+        }
+    }
+
+    deinit {
+        if let interruptionObserver {
+            NotificationCenter.default.removeObserver(interruptionObserver)
+        }
     }
 
     nonisolated var isAvailable: Bool { true }

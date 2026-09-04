@@ -30,6 +30,14 @@ nonisolated struct LocalModel: Identifiable, Sendable, Equatable {
             ? String(format: "%.1f GB", Double(approxDownloadMB) / 1024)
             : "\(approxDownloadMB) MB"
     }
+
+    /// Device-fit gate: 4-bit weights load fully into memory, and a model that
+    /// exceeds the per-app memory ceiling jetsams the app on load. Anything over
+    /// ~1 GB of weights needs a 6 GB+ device (iPhone 15 Pro and later).
+    var fitsThisDevice: Bool {
+        approxDownloadMB <= 1_000
+            || ProcessInfo.processInfo.physicalMemory >= 6 * 1_073_741_824
+    }
 }
 
 nonisolated enum LocalModelCatalog {

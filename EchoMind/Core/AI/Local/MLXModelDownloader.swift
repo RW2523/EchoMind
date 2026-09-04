@@ -23,6 +23,7 @@ nonisolated struct MLXModelDownloader: ModelDownloadService {
 
     func delete(_ model: LocalModel) async throws {
         try ModelStorage.unmark(model)
+        ModelStorage.removeCachedWeights(repo: model.huggingFaceRepo)
     }
 
     func download(_ model: LocalModel, onProgress: @escaping @Sendable (Double) -> Void) async throws {

@@ -63,6 +63,7 @@ actor SwiftDataSessionRepository: SessionRepository {
         modelContext.delete(session)          // cascades TranscriptSegments (DB relationship)
         try sweepChunks(sourceId: id)         // polymorphic chunks have no relationship
         try modelContext.save()               // one transaction
+        AudioStore().remove(id)               // retained .m4a lives on disk, not in SwiftData
     }
 
     /// Wipe every session + segment with BOUNDED memory (Delete All Data).

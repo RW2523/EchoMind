@@ -21,19 +21,33 @@ actor MockAudioCapturing: AudioCapturing {
 }
 
 /// Replays a fixed list of updates, then finishes the stream.
-nonisolated struct MockTranscriptionService: TranscriptionService {
+nonisolated final class MockTranscriptionService: TranscriptionService, @unchecked Sendable {
     let updates: [TranscriptionUpdate]
+    private let lock = NSLock()
+    private var continuation: AsyncThrowingStream<TranscriptionUpdate, Error>.Continuation?
+
+    init(updates: [TranscriptionUpdate]) { self.updates = updates }
 
     func start(locale: Locale,
                audio: AsyncThrowingStream<AudioBufferBox, Error>) async throws -> AsyncThrowingStream<TranscriptionUpdate, Error> {
         let updates = self.updates
         return AsyncThrowingStream { continuation in
             for update in updates { continuation.yield(update) }
-            continuation.finish()
+            // Stay open until stop(), like the real SpeechAnalyzer stream — a
+            // stream that finishes mid-recording reads as a dead pipeline.
+            lock.lock()
+            self.continuation = continuation
+            lock.unlock()
         }
     }
 
-    func stop() async {}
+    func stop() async {
+        lock.lock()
+        let continuation = self.continuation
+        self.continuation = nil
+        lock.unlock()
+        continuation?.finish()
+    }
 }
 
 nonisolated struct MockEmbeddingService: EmbeddingService {

@@ -96,6 +96,12 @@ final class AIModelsViewModel {
     }
 
     private func download(_ model: LocalModel) async {
+        // Jetsam guard: a model whose weights exceed this device's per-app
+        // memory ceiling would crash the app at load, not here at download.
+        guard model.fitsThisDevice else {
+            states[model.id] = .failed("This model needs a newer iPhone (6 GB+ memory). Try the 1.5B model instead.")
+            return
+        }
         states[model.id] = .downloading(0)
         do {
             try await downloader.download(model) { progress in

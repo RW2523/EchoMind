@@ -232,6 +232,24 @@ final class AppDependencies {
                                          isEnabled: { store.appLockEnabled })
     }
 
+    /// Single shared live-transcript view model. A recording deliberately
+    /// survives leaving the screen, so re-entering must reattach to the SAME
+    /// view model — a fresh one per push showed "Tap Record to start" over a
+    /// live capture, with no way to stop it (field bug: orphaned recording).
+    private var _liveTranscript: LiveTranscriptViewModel?
+    var liveTranscriptViewModel: LiveTranscriptViewModel {
+        if let _liveTranscript { return _liveTranscript }
+        let vm = LiveTranscriptViewModel(
+            audio: audioCapturing, transcription: transcriptionService,
+            assets: speechAssets, sessions: sessionRepository,
+            permissions: permissions, indexer: indexer,
+            reportGenerator: reportGenerator,
+            retainAudio: { [settingsStore] in settingsStore.audioRetentionEnabled },
+            audioStore: audioStore)
+        _liveTranscript = vm
+        return vm
+    }
+
     /// Warm the generation stack once per launch when a voice surface opens: a
     /// 2-token respond() forces the local MLX weights (or the Apple FM session)
     /// to load WHILE the user is still speaking, instead of stalling their first
@@ -266,10 +284,19 @@ final class AppDependencies {
             return SystemSpeechSynthesizer()
         case .kokoro(let id):
             #if canImport(FluidAudio)
-            if let model = LocalModelCatalog.model(id: id) { return KokoroSynthesizer(model: model) }
+            // iOS 26.4–26.5.x intermittently crashes Kokoro synthesis in libBNNS
+            // (Apple bug, flagged by FluidAudio; fixed in 26.6). On those builds
+            // the system voice is the safe floor — a plainer voice beats a crash.
+            if !Self.kokoroCrashProneOS,
+               let model = LocalModelCatalog.model(id: id) { return KokoroSynthesizer(model: model) }
             #endif
             return SystemSpeechSynthesizer()
         }
+    }
+
+    static var kokoroCrashProneOS: Bool {
+        let v = ProcessInfo.processInfo.operatingSystemVersion
+        return v.majorVersion == 26 && (v.minorVersion == 4 || v.minorVersion == 5)
     }
 
     /// True when the voice agent is on the system TTS floor AND the device has only

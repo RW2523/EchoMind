@@ -50,6 +50,21 @@ nonisolated struct DefaultDataExportService: DataExportService {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 
         var urls: [URL] = []
+        var usedNames: Set<String> = []
+        // Sessions can share a title (two "Meeting" on the same day) — identical
+        // file names silently overwrote each other, dropping sessions from the
+        // export. Deduplicate with a numeric suffix.
+        func uniqueURL(title: String, ext: String) -> URL {
+            let base = SessionExporter.sanitizedFileName(title, ext: ext)
+            var name = base
+            var counter = 2
+            while !usedNames.insert(name.lowercased()).inserted {
+                let stem = (base as NSString).deletingPathExtension
+                name = "\(stem)-\(counter).\(ext)"
+                counter += 1
+            }
+            return directory.appendingPathComponent(name)
+        }
         for session in try await sessions.fetchAll() {
             let segments = try await sessions.fetchSegments(sessionId: session.id)
             var markdown = SessionExporter.markdown(session: session, segments: segments)
@@ -57,15 +72,13 @@ nonisolated struct DefaultDataExportService: DataExportService {
                let summary = try? JSONDecoder().decode(MeetingSummary.self, from: Data(json.utf8)) {
                 markdown += "\n## Summary\n\n" + Self.summaryMarkdown(summary)
             }
-            let baseName = SessionExporter.sanitizedFileName(session.title, ext: "md")
-            let url = directory.appendingPathComponent(baseName)
+            let url = uniqueURL(title: session.title, ext: "md")
             try markdown.data(using: .utf8)?.write(to: url)
             urls.append(url)
 
             // Pair the retained recording with its transcript, sharing the base name.
             if audioStore.exists(session.id) {
-                let audioName = SessionExporter.sanitizedFileName(session.title, ext: "m4a")
-                let audioURL = directory.appendingPathComponent(audioName)
+                let audioURL = uniqueURL(title: session.title, ext: "m4a")
                 if (try? FileManager.default.copyItem(at: audioStore.url(for: session.id), to: audioURL)) != nil {
                     urls.append(audioURL)
                 }
@@ -107,6 +120,12 @@ nonisolated struct DefaultDataExportService: DataExportService {
         }
         return lines.joined(separator: "\n")
     }
+}
+
+nonisolated extension Notification.Name {
+    /// Posted after Delete All Data completes so long-lived view models
+    /// (the Ask thread) drop their in-memory copies of wiped content.
+    static let echoMindDataWiped = Notification.Name("echoMindDataWiped")
 }
 
 nonisolated struct DefaultDataWipeService: DataWipeService {

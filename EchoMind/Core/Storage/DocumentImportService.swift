@@ -21,6 +21,13 @@ nonisolated struct DefaultDocumentImportService: DocumentImportService {
         let scoped = url.startAccessingSecurityScopedResource()
         defer { if scoped { url.stopAccessingSecurityScopedResource() } }
 
+        // Check the size BEFORE reading: loading a multi-GB pick into memory
+        // just to reject it would jetsam the app.
+        if let bytes = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize,
+           bytes > Self.pdfRawLimit {
+            throw ImportError.tooLarge(limitMB: 5)
+        }
+
         let data: Data
         do {
             data = try Data(contentsOf: url)

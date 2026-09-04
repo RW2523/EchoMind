@@ -15,9 +15,17 @@ final class AudioPlaybackService {
     private(set) var duration: TimeInterval = 0
     private(set) var isLoaded = false
 
-    /// Loads a file for playback. Returns false if it can't be opened.
+    /// When true, playback refuses to touch the shared AVAudioSession — flipping
+    /// the category to .playback mid-recording tears the input route out from
+    /// under the live capture engine (field bug: opening a session with retained
+    /// audio while recording silently killed the recording).
+    @ObservationIgnored var isCaptureActive: () -> Bool = { false }
+
+    /// Loads a file for playback. Returns false if it can't be opened (or a
+    /// live recording owns the audio session).
     @discardableResult
     func load(url: URL) -> Bool {
+        guard !isCaptureActive() else { return false }
         guard let player = try? AVAudioPlayer(contentsOf: url) else { return false }
         try? AVAudioSession.sharedInstance().setCategory(.playback)
         player.prepareToPlay()
@@ -28,7 +36,7 @@ final class AudioPlaybackService {
     }
 
     func play() {
-        guard let player else { return }
+        guard let player, !isCaptureActive() else { return }
         try? AVAudioSession.sharedInstance().setActive(true)
         player.play()
         isPlaying = true

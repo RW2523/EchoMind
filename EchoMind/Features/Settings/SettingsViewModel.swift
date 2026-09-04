@@ -99,6 +99,10 @@ final class SettingsViewModel {
         isDeleting = true
         try? await wipeService.deleteAllData()
         isDeleting = false
+        // Live view models (the Ask thread) hold in-memory copies of what was
+        // just wiped — without this, stale messages survive on screen and feed
+        // the next question's history.
+        NotificationCenter.default.post(name: .echoMindDataWiped, object: nil)
         await load()
     }
 

@@ -54,8 +54,15 @@ actor MLXEngine: LocalLLMEngine {
             return try await container.perform { context in
                 let input = try await context.processor.prepare(input: UserInput(messages: chat))
                 let parameters = GenerateParameters(maxTokens: maxTokens, temperature: 0.4)
+                // The callback is the ONLY cancellation point in MLX's
+                // synchronous generation loop: without the isCancelled check, a
+                // barge-in left the discarded generation running to its full
+                // token budget, serialized ahead of the next answer (voice hang).
                 let result = try MLXLMCommon.generate(
-                    input: input, parameters: parameters, context: context) { (_: [Int]) in .more }
+                    input: input, parameters: parameters, context: context) { (_: [Int]) in
+                    Task.isCancelled ? .stop : .more
+                }
+                try Task.checkCancellation()
                 return result.output
             }
         } catch {

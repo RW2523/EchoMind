@@ -44,6 +44,17 @@ extension AskResult {
 }
 
 nonisolated enum RAGPrompts {
+    /// Injected in place of the Context block when retrieval found nothing.
+    /// Without it the model invents documents/meetings from chat history when
+    /// asked about "my documents" against an empty or unmatched knowledge base.
+    static let emptyContextNotice = """
+    (No passages were found in the user's saved knowledge for this question. \
+    If the question is about their documents, meetings, or saved knowledge, say \
+    you couldn't find anything and set notFoundInContext to true — NEVER invent \
+    documents, meetings, or facts, and never present items from the conversation \
+    history as saved knowledge.)
+    """
+
     static let hybrid = """
     You are EchoMind, the user's personal meeting-and-knowledge assistant. Below \
     is the conversation so far and numbered Context passages [1], [2], … from the \
@@ -249,11 +260,21 @@ nonisolated struct RAGPipeline: RAGService {
 
     private func answer(question: String, retrieval: Retrieval, facts: String,
                         packed: [RetrievedChunk], lastAssistant: String? = nil) async throws -> AskResult {
+        // Deterministic honesty guard (field bug): with nothing retrieved, the
+        // model inventoried documents dreamed up from chat history — and prompt
+        // rules alone didn't stop it. A question about saved knowledge with an
+        // empty retrieval is answerable without a model: nothing was found.
+        if packed.isEmpty, Self.mentionsSavedKnowledge(question) {
+            return .notFound(answer: Self.emptyKnowledgeAnswer, followUps: [])
+        }
         let context = packed.enumerated()
             .map { "[\($0.offset + 1)] \($0.element.chunk.text)" }
             .joined(separator: "\n\n")
+        // Field bug: with nothing retrieved, the model inventoried documents it
+        // dreamed up from chat history. An empty Context must say so explicitly.
+        let promptContext = context.isEmpty ? RAGPrompts.emptyContextNotice : context
         let prompt = RAGPrompts.prompt(memory: retrieval.memory, question: question,
-                                       context: context, knownFacts: facts)
+                                       context: promptContext, knownFacts: facts)
         var result = try await gateway.generate(
             instructions: RAGPrompts.hybrid,
             prompt: prompt,
@@ -336,6 +357,21 @@ nonisolated struct RAGPipeline: RAGService {
             let chunk = packed[index - 1].chunk
             return SourceRef(sourceId: chunk.sourceId, sourceType: chunk.sourceType, chunkId: chunk.id)
         }
+    }
+
+    static let emptyKnowledgeAnswer = "I couldn't find anything about that in your saved documents or meetings. If you haven't added any yet, import a document or record a session, then ask again."
+
+    /// Does the question refer to the user's own saved knowledge (documents,
+    /// meetings, notes)? Used with an empty retrieval to answer honestly
+    /// without a model call — a catalog question against nothing found needs
+    /// no generation, and generation is where the confabulation happened.
+    static func mentionsSavedKnowledge(_ question: String) -> Bool {
+        let q = question.lowercased()
+        let patterns = ["my document", "my doc", "my meeting", "my session", "my note",
+                        "my knowledge", "my file", "my transcript", "my paper",
+                        "my recording", "my saved", "do i have", "have i saved",
+                        "did i save", "i have saved", "documents do i", "what did i record"]
+        return patterns.contains { q.contains($0) }
     }
 
     /// True when a new answer is essentially the previous one re-emitted — exact
@@ -447,9 +483,18 @@ extension RAGPipeline: StreamingRAGService {
                     }
                     // Same retrieval as ask() — one shared implementation.
                     let retrieval = try await retrieveContext(question: trimmed, history: history)
+                    // Same deterministic honesty guard as ask(): empty retrieval
+                    // + a question about saved knowledge needs no generation.
+                    if retrieval.context.isEmpty, Self.mentionsSavedKnowledge(trimmed) {
+                        continuation.yield(Self.emptyKnowledgeAnswer)
+                        continuation.finish()
+                        return
+                    }
                     let facts = await factsBlock()
+                    let voiceContext = retrieval.context.isEmpty
+                        ? RAGPrompts.emptyContextNotice : retrieval.context
                     let prompt = RAGPrompts.prompt(memory: retrieval.memory, question: trimmed,
-                                                   context: retrieval.context, knownFacts: facts)
+                                                   context: voiceContext, knownFacts: facts)
 
                     let source = (gateway as? StreamingModelGateway)?
                         .stream(instructions: RAGPrompts.voiceProse, prompt: prompt, maxOutputTokens: Self.outputReserve)
