@@ -26,6 +26,9 @@ nonisolated enum DebugFixtures {
     Billing: We do not store credit card details ourselves. All card data is \
     stored by our payment processor, PayFlow, under its own privacy policy. \
     We receive only a token and the last four digits.
+
+    Detection runs on the PFN (Parking Frame Network) detector, which reaches \
+    a benchmark score of 91.
     """
 
     static let sampleDocumentTitle = "Company Handbook"

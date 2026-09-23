@@ -54,4 +54,86 @@ nonisolated enum AnswerVerifier {
         for source in extraAllowed { allowed.formUnion(numbers(in: source)) }
         return numbers(in: answer).subtracting(allowed).sorted()
     }
+
+    /// Acronym expansions asserted in the answer ("HHL stands for …") that the
+    /// context does not support. The number check can't see this failure — field
+    /// bug: "HHL stands for Hybrid Least Squares" for a paper that says
+    /// Harrow–Hassidim–Lloyd. An expansion is unsupported when NO leading run of
+    /// its significant words both spells the acronym AND occurs contiguously in
+    /// the context. Prefix-based on purpose: commas inside a correct expansion
+    /// ("Harrow, Hassidim and Lloyd" — the paper's own wording) and trailing
+    /// clauses ("… and it solves linear systems") must not cause false flags.
+    static func unsupportedExpansions(answer: String, context: String) -> [String] {
+        let normalizedContext = significantPhrase(context)
+        var bad: [String] = []
+        for phrase in ["stands for", "is short for", "is an abbreviation for"] {
+            var search = answer[answer.startIndex...]
+            while let range = search.range(of: phrase) {
+                let beforeText = answer[..<range.lowerBound]
+                search = answer[range.upperBound...]
+                // Word boundary: "stands for" must not match inside "stands
+                // formally". The phrase always ends mid-sentence, so the next
+                // character (if any) can't be a letter.
+                if range.upperBound < answer.endIndex, answer[range.upperBound].isLetter { continue }
+                // The expansion must start right after the phrase ("stands for,
+                // then…" asserts nothing), and runs to a sentence-hard
+                // terminator — a comma is legal INSIDE an expansion ("Harrow,
+                // Hassidim and Lloyd"), so it must not truncate what we inspect.
+                let remainder = answer[range.upperBound...].drop(while: { $0 == " " })
+                let after = remainder.split(whereSeparator: { $0 == "." || $0 == ";" || $0 == "(" || $0 == "\n" })
+                // The acronym is the last whitespace token, edge punctuation
+                // trimmed — splitting on hyphens would truncate "3D-CNN" to "CNN".
+                let acronym = beforeText.split(whereSeparator: { $0.isWhitespace }).last
+                    .map { String($0).trimmingCharacters(in: CharacterSet.alphanumerics.inverted) } ?? ""
+                guard let lead = remainder.first,
+                      lead.isLetter || lead.isNumber || "\"'“‘".contains(lead),
+                      acronym.count >= 2, acronym == acronym.uppercased(),
+                      acronym.contains(where: \.isLetter),          // "45 stands for…" isn't an acronym
+                      let expansion = after.first.map({ String($0).trimmingCharacters(in: .whitespaces) }),
+                      !expansion.isEmpty else { continue }
+                let words = Array(expansion.split(whereSeparator: { !$0.isLetter && !$0.isNumber })
+                    .map(String.init).prefix(12))
+                let significant = words.filter { !Self.stopwords.contains($0.lowercased()) }
+                guard !significant.isEmpty else { continue }
+                // Supported when a leading run of the expansion (a) appears
+                // contiguously in the context AND (b) spells the acronym —
+                // initials computed both with and without stopwords, so
+                // "POW = prisoner of war" works — or (c) the FULL expansion
+                // appears verbatim in the context even if the initials don't
+                // spell it (non-initialisms like "ID is short for
+                // identification"): the document saying it is support enough.
+                let acronymLower = acronym.lowercased()
+                let fullPhrase = significantPhrase(significant.joined(separator: " "))
+                let supported = normalizedContext.contains(fullPhrase)
+                    || (1...words.count).contains { length in
+                        let candidate = Array(words.prefix(length))
+                        let allInitials = candidate.compactMap { $0.first.map(String.init) }
+                            .joined().lowercased()
+                        let sigInitials = candidate.filter { !Self.stopwords.contains($0.lowercased()) }
+                            .compactMap { $0.first.map(String.init) }.joined().lowercased()
+                        return (allInitials == acronymLower || sigInitials == acronymLower)
+                            && normalizedContext.contains(significantPhrase(candidate.joined(separator: " ")))
+                    }
+                if !supported {
+                    let reported = significant.prefix(max(acronym.count, 1)).joined(separator: " ")
+                    bad.append("\(acronym) = \(reported)")
+                }
+            }
+        }
+        return bad
+    }
+
+    private static let stopwords: Set<String> = ["of", "for", "and", "the", "in", "on", "to", "a", "an"]
+
+    /// Case- and diacritic-folded significant words (stopwords dropped, naive
+    /// plural 's' trimmed) joined by single spaces, space-padded — so
+    /// "Harrow-Hassidim-Lloyd" and "Harrow, Hassidim and Lloyd" reduce to the
+    /// same contiguous phrase, and "Networks" matches "network".
+    private static func significantPhrase(_ text: String) -> String {
+        " " + text.split(whereSeparator: { !$0.isLetter && !$0.isNumber })
+            .map { $0.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil) }
+            .filter { !stopwords.contains($0) }
+            .map { $0.count > 3 && $0.hasSuffix("s") ? String($0.dropLast()) : $0 }
+            .joined(separator: " ") + " "
+    }
 }

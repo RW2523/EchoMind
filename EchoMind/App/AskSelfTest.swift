@@ -76,6 +76,29 @@ enum AskSelfTest {
         await ask(dependencies, "does falcon store credit card details?")
         // Absent-term trap: must be NOT-FOUND, never a confabulated explanation.
         await ask(dependencies, "what is the XQRT-9 module in my documents?")
+        // Acronym trap: expansion must be the document's exact wording
+        // (field bug: "HHL stands for Hybrid Least Squares" was invented).
+        await ask(dependencies, "what does PFN stand for in my documents?")
+
+        // Deep anti-parrot probe (field bug): an off-topic STATEMENT after a
+        // few exchanges must never get an OLD answer re-emitted — the guard has
+        // to look further back than the last turn.
+        let falconAnswer = "The final dataset contains 5,800 clips, split into 5,000 training, 400 validation, and 400 test clips."
+        let cardAnswer = "Falcon does not store credit card details. All card data is stored by our payment processor, PayFlow, under its own privacy policy."
+        let deepHistory = [ChatTurn(role: .user, content: "how many clips are in the falcon dataset?"),
+                           ChatTurn(role: .assistant, content: falconAnswer),
+                           ChatTurn(role: .user, content: "does falcon store credit card details?"),
+                           ChatTurn(role: .assistant, content: cardAnswer)]
+        do {
+            let result = try await dependencies.ragService.ask(
+                "The falcon dataset is tiny, only a handful of clips, right?", history: deepHistory)
+            let text = result.spokenText
+            let parroted = RAGPipeline.isNearDuplicate(text, of: falconAnswer)
+                || RAGPipeline.isNearDuplicate(text, of: cardAnswer)
+            print("[SelfTest] STATEMENT \(parroted ? "PARROTED ✗" : "fresh ✓"): \(text.prefix(160))")
+        } catch {
+            print("[SelfTest] STATEMENT probe failed: \(error)")
+        }
 
         // Voice text path: the SAME streaming pipeline the voice agent consumes
         // (shared retrieveContext + streamed prose). Proves retrieval + streaming

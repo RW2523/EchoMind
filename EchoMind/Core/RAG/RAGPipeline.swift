@@ -86,11 +86,21 @@ nonisolated enum RAGPrompts {
     5. Attribute carefully. Mind negations and who does what: "X does not do \
     this; Y does it" must never become "X does this". When passages come from \
     different documents, never mix their facts.
+    6. When asked for a specific number of things ("the four approaches", "the \
+    five conditions"), list ONLY items the passages actually name — if the \
+    passages name fewer, give those and say the rest isn't in the retrieved \
+    passages. NEVER pad a list with invented items.
+    7. Expand an acronym only with the exact expansion written in the passages. \
+    If the passages never spell it out, say so — never supply an expansion \
+    from memory.
 
     If it is NOT relevant (greetings, small talk, clearly general questions): \
     ignore the Context entirely and answer naturally. Never force a casual \
     message into a grounded answer. Set usedProvidedContext to false and leave \
-    citedPassages empty.
+    citedPassages empty. But when you answer a FACTUAL question (who/what/when \
+    about people, events, organizations) from general knowledge because the \
+    Context doesn't cover it, begin with "Outside your saved knowledge: " so \
+    the user knows it isn't from their documents or meetings.
 
     When the user's message ASSERTS a fact, verify it against the passages: if it \
     conflicts, begin by politely correcting it with the right fact ("Actually, it \
@@ -230,10 +240,10 @@ nonisolated struct RAGPipeline: RAGService {
         // One unified guided call — grounds (with citations) if the context is
         // relevant, chats otherwise; always returns follow-ups.
         let facts = await factsBlock()
-        let lastAssistant = history.last(where: { $0.role != .user })?.content
+        let exchanges = Self.recentExchanges(history: history)
         do {
             return try await answer(question: trimmed, retrieval: retrieval, facts: facts,
-                                    packed: retrieval.packed, lastAssistant: lastAssistant)
+                                    packed: retrieval.packed, recentExchanges: exchanges)
         } catch ModelGatewayError.exceededContextWindow {
             guard retrieval.packed.count > 1 else {
                 return .retrievalOnly(passages: retrieval.retrieved, reason: .contextOverflow)
@@ -241,7 +251,7 @@ nonisolated struct RAGPipeline: RAGService {
             do {
                 return try await answer(question: trimmed, retrieval: retrieval, facts: facts,
                                         packed: Array(retrieval.packed.dropLast()),
-                                        lastAssistant: lastAssistant)
+                                        recentExchanges: exchanges)
             } catch {
                 return .retrievalOnly(passages: retrieval.retrieved, reason: .contextOverflow)
             }
@@ -259,7 +269,20 @@ nonisolated struct RAGPipeline: RAGService {
     // MARK: - Generation
 
     private func answer(question: String, retrieval: Retrieval, facts: String,
-                        packed: [RetrievedChunk], lastAssistant: String? = nil) async throws -> AskResult {
+                        packed: [RetrievedChunk],
+                        recentExchanges: [(question: String, answer: String)] = []) async throws -> AskResult {
+        // An answer that re-emits ANY recent assistant turn is a parrot — unless
+        // the user re-asked essentially the same question that produced it
+        // (asking twice legitimately repeats). Field bug: an off-topic statement
+        // got an OLD Tumblr answer back, twice, because only the LAST assistant
+        // turn was checked.
+        func parrots(_ text: String) -> Bool {
+            guard !Self.requestsRepeat(question) else { return false }
+            return recentExchanges.contains { exchange in
+                Self.isNearDuplicate(text, of: exchange.answer)
+                    && !Self.isSameQuestion(question, exchange.question)
+            }
+        }
         // Deterministic honesty guard (field bug): with nothing retrieved, the
         // model inventoried documents dreamed up from chat history — and prompt
         // rules alone didn't stop it. A question about saved knowledge with an
@@ -281,16 +304,25 @@ nonisolated struct RAGPipeline: RAGService {
             as: RAGAnswer.self,
             maxOutputTokens: Self.outputReserve)
         // Deterministic parrot guard (belt to the prompt's braces): if the model
-        // re-emitted its previous answer for a NEW message, retry once with an
-        // explicit corrective. Rare after the memory-echo truncation, and only
-        // ever costs one extra call when the duplication actually happened.
-        if Self.isNearDuplicate(result.answer, of: lastAssistant) {
+        // re-emitted an earlier answer for a NEW message, retry once with an
+        // explicit corrective; if the retry parrots too, ship an honest ask for
+        // clarification — a stale echo must never be presented as a response.
+        if parrots(result.answer) {
             let retry = try? await gateway.generate(
-                instructions: RAGPrompts.hybrid + "\n\nIMPORTANT: Your previous reply is already known to the user. Do NOT repeat it — respond freshly and only to the latest message.",
+                instructions: RAGPrompts.hybrid + "\n\nIMPORTANT: Your draft repeated an EARLIER reply that does not answer the user's LATEST message. Respond freshly and only to the latest message — if it's a statement, react to it using the Context; if you can't, say so.",
                 prompt: prompt,
                 as: RAGAnswer.self,
                 maxOutputTokens: Self.outputReserve)
-            if let retry, !Self.isNearDuplicate(retry.answer, of: lastAssistant) { result = retry }
+            if let retry, !parrots(retry.answer) {
+                result = retry
+            } else {
+                // The draft is a genuine stale echo (same-question re-asks and
+                // explicit repeat requests are already exempt) — an honest ask
+                // for clarification beats re-presenting an old answer.
+                return .conversational(
+                    answer: "I'm not sure how to respond to that one — could you rephrase it, or add a detail like a name, number, or date?",
+                    followUps: [])
+            }
         }
 
         // Anti-confabulation gate: every figure in a grounded answer must exist in
@@ -307,26 +339,32 @@ nonisolated struct RAGPipeline: RAGService {
         let extraAllowed = [facts, userTurns]
         var caveat = ""
         if result.usedProvidedContext, !result.notFoundInContext, !packed.isEmpty {
-            let unsupported = AnswerVerifier.unsupportedNumbers(
-                answer: result.answer, context: context, question: question, extraAllowed: extraAllowed)
+            // Figures AND acronym expansions are both checkable deterministically
+            // (field bugs: invented "22,000 frames"; "HHL stands for Hybrid Least
+            // Squares" for a paper that says Harrow–Hassidim–Lloyd).
+            func violations(in answer: String) -> [String] {
+                AnswerVerifier.unsupportedNumbers(
+                    answer: answer, context: context, question: question, extraAllowed: extraAllowed)
+                    + AnswerVerifier.unsupportedExpansions(answer: answer, context: context)
+            }
+            let unsupported = violations(in: result.answer)
             if !unsupported.isEmpty {
-                let corrective = prompt + "\n\nIMPORTANT: your previous draft used figures that are NOT in the passages: "
+                let corrective = prompt + "\n\nIMPORTANT: your previous draft stated figures or acronym expansions that are NOT in the passages: "
                     + unsupported.joined(separator: ", ")
-                    + ". Answer again using ONLY figures that appear in the passages; if the information isn't there, say so and set notFoundInContext true."
+                    + ". Answer again using ONLY figures and wording that appear in the passages; if the information isn't there, say so and set notFoundInContext true."
                 if let retry = try? await gateway.generate(
                     instructions: RAGPrompts.hybrid, prompt: corrective,
                     as: RAGAnswer.self, maxOutputTokens: Self.outputReserve),
-                   !Self.isNearDuplicate(retry.answer, of: lastAssistant) {
+                   !parrots(retry.answer) {
                     result = retry
                 }
                 // The caveat must NOT depend on the retry's self-reported flags:
                 // a small model under corrective pressure can flip
                 // usedProvidedContext/notFoundInContext while keeping the bad
                 // figure, and the whole point is never shipping it silently.
-                let still = AnswerVerifier.unsupportedNumbers(
-                    answer: result.answer, context: context, question: question, extraAllowed: extraAllowed)
+                let still = violations(in: result.answer)
                 if !still.isEmpty {
-                    caveat = "\n\n⚠️ Double-check these figures against your documents — I couldn't verify: \(still.joined(separator: ", "))."
+                    caveat = "\n\n⚠️ Double-check these against your documents — I couldn't verify: \(still.joined(separator: ", "))."
                 }
             }
         }
@@ -372,6 +410,66 @@ nonisolated struct RAGPipeline: RAGService {
                         "my recording", "my saved", "do i have", "have i saved",
                         "did i save", "i have saved", "documents do i", "what did i record"]
         return patterns.contains { q.contains($0) }
+    }
+
+    /// The last few question→answer pairs from history, for the parrot guard.
+    /// Each assistant turn is paired with the user turn that preceded it.
+    static func recentExchanges(history: [ChatTurn],
+                                limit: Int = 4) -> [(question: String, answer: String)] {
+        var pairs: [(question: String, answer: String)] = []
+        var pendingQuestion = ""
+        for turn in history {
+            if turn.role == .user {
+                pendingQuestion = turn.content
+            } else {
+                pairs.append((question: pendingQuestion, answer: Self.answerBody(turn.content)))
+            }
+        }
+        return Array(pairs.suffix(limit))
+    }
+
+    /// Persisted assistant turns may carry an appended verification caveat.
+    /// Compare against the answer BODY: a caveat lengthens the stored turn
+    /// enough that a re-emitted body would slip under isNearDuplicate's 0.75
+    /// length ratio and the parrot would go undetected.
+    static func answerBody(_ content: String) -> String {
+        for marker in ["\n\n⚠️", " Please double-check those", " Sorry — that repeated"] {
+            if let range = content.range(of: marker) {
+                return String(content[..<range.lowerBound])
+            }
+        }
+        return content
+    }
+
+    /// Loose question equivalence: asking the same thing again legitimately
+    /// gets the same answer, so the parrot guard must not fire for repeats.
+    /// Overlap coefficient over content words (not Jaccard): a re-ask that ADDS
+    /// qualifier words ("Under what five conditions does Tumblr disclose user
+    /// information to third parties?" after "Under what conditions does Tumblr
+    /// disclose information?") is still the same question — Jaccard punished
+    /// exactly that and turned correct regenerated answers into refusals.
+    static func isSameQuestion(_ a: String, _ b: String) -> Bool {
+        let filler: Set<String> = ["what", "who", "when", "where", "which", "how", "why",
+                                   "is", "are", "was", "were", "does", "do", "did", "can",
+                                   "the", "a", "an", "of", "for", "and", "to", "in", "on",
+                                   "under", "about", "please", "me", "tell", "you"]
+        func words(_ text: String) -> Set<String> {
+            Set(text.lowercased().split(whereSeparator: { !$0.isLetter && !$0.isNumber })
+                .map(String.init).filter { !filler.contains($0) })
+        }
+        let wa = words(a), wb = words(b)
+        guard !wa.isEmpty, !wb.isEmpty else { return false }
+        let overlap = Double(wa.intersection(wb).count)
+        return overlap / Double(min(wa.count, wb.count)) >= 0.75
+    }
+
+    /// Explicit "say that again" style requests: repeating IS the correct
+    /// behavior, so the parrot guard must stand down entirely.
+    static func requestsRepeat(_ message: String) -> Bool {
+        let m = message.lowercased()
+        return ["repeat that", "can you repeat", "say that again", "say it again",
+                "one more time", "tell me again", "what did you say", "come again"]
+            .contains { m.contains($0) }
     }
 
     /// True when a new answer is essentially the previous one re-emitted — exact
@@ -505,19 +603,34 @@ extension RAGPipeline: StreamingRAGService {
                         continuation.yield(chunk)
                     }
                     // Voice can't retry (the words are already being spoken), but
-                    // it must never end on a silently unverifiable figure: append
-                    // a spoken caveat when the finished answer used numbers that
-                    // exist nowhere in the passages, the question, or user turns.
+                    // it must never end on a silently unverifiable claim: append
+                    // a spoken caveat when the finished answer used numbers or
+                    // acronym expansions that exist nowhere in the passages, the
+                    // question, or user turns (same checks as the text path).
+                    var addendum = ""
                     if !retrieval.context.isEmpty {
                         let userTurns = retrieval.memory.split(separator: "\n")
                             .filter { $0.hasPrefix("User: ") }.joined(separator: "\n")
                         let unsupported = AnswerVerifier.unsupportedNumbers(
                             answer: final, context: retrieval.context, question: trimmed,
                             extraAllowed: [facts, userTurns])
+                            + AnswerVerifier.unsupportedExpansions(answer: final, context: retrieval.context)
                         if !unsupported.isEmpty {
-                            continuation.yield(final + " Please double-check those figures against your documents — I couldn't verify them.")
+                            addendum = " Please double-check those details against your documents — I couldn't verify them."
                         }
                     }
+                    // Deep parrot guard, voice edition (field bug): a re-emitted
+                    // OLD answer for a NEW message can't be retried mid-stream,
+                    // but it must never end presented as fresh — own up and ask
+                    // the listener to rephrase. Takes precedence over the
+                    // figures caveat: the whole answer is stale, not one figure.
+                    if !Self.requestsRepeat(trimmed),
+                       Self.recentExchanges(history: history).contains(where: {
+                        Self.isNearDuplicate(final, of: $0.answer) && !Self.isSameQuestion(trimmed, $0.question)
+                    }) {
+                        addendum = " Sorry — that repeated an earlier answer and may not address what you just said. Could you rephrase?"
+                    }
+                    if !addendum.isEmpty { continuation.yield(final + addendum) }
                     continuation.finish()
                 } catch {
                     continuation.finish(throwing: error)
